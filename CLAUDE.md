@@ -1,108 +1,166 @@
-# CLAUDE.md — Project Guide for AI Assistants
+# CLAUDE.md — Rappi Claude Plugin
 
 ## What This Project Is
 
-Rappi CLI is a Python CLI + MCP server that wraps Rappi's internal (undocumented) food delivery API. It lets users order food from the terminal and enables AI assistants to order food via MCP tools. Colombia-focused (prices in COP, Bogota default location).
+A **Claude plugin** for ordering food from Rappi (Colombia's leading delivery platform). The plugin gives Claude the ability to search restaurants, browse menus, manage a cart, place orders, and track deliveries — with a local memory system that learns the user's preferences over time.
+
+The plugin consists of: **skills** (what Claude follows), **MCP tools** (what Claude calls), **an agent** (specialized ordering intelligence), **memory** (SQLite persistence), and a **CLI** (terminal alternative).
 
 ## Quick Reference
 
 ```bash
 uv sync                           # Install dependencies
-uv run rappi --help               # CLI help
-uv run rappi go                   # Interactive ordering
-uv run rappi auth login           # Browser auth
-uv run rappi-mcp                  # Start MCP server (stdio)
-uv run pytest                     # Run tests
+uv run rappi auth login           # Authenticate (opens browser)
+claude --plugin-dir .             # Load plugin in Claude Code
+uv run rappi go                   # Terminal ordering (alternative)
+uv run rappi-mcp                  # Start MCP server standalone
 ```
 
-## Architecture
-
-**Shared services pattern**: CLI, MCP, and interactive mode all call the same async service functions in `src/rappi/services/`. Never duplicate business logic across interfaces.
+## Plugin Structure
 
 ```
-CLI (typer) ──┐
-MCP (fastmcp) ┼──→ Services (async) ──→ RappiClient (httpx) ──→ Rappi API
-Interactive ──┘         │
-                        └──→ MemoryManager (aiosqlite) ──→ ~/.rappi/rappi.db
+rappi-claude-plugin/
+├── .claude-plugin/plugin.json   # Plugin manifest (required)
+├── .mcp.json                    # Auto-registers MCP server
+├── .claude/settings.json        # SessionStart auth check hook
+│
+├── skills/                      # Claude skills (slash commands)
+│   ├── order-food/SKILL.md      # /order-food — full ordering workflow
+│   ├── rappi-search/SKILL.md    # /rappi-search — quick product lookup
+│   └── rappi-reorder/SKILL.md   # /rappi-reorder — reorder from history
+│
+├── agents/
+│   └── rappi-agent.md           # Specialized ordering agent (Sonnet)
+│
+└── src/rappi/                   # Plugin engine
+    ├── mcp/server.py            # 22 MCP tools
+    ├── services/                # Shared business logic
+    ├── memory/                  # SQLite + optional embeddings
+    ├── cli/                     # Terminal interface
+    ├── models/                  # Pydantic data models
+    └── client.py                # Rappi API client
 ```
 
-**RappiClient** (`src/rappi/client.py`): Async HTTP client. Injects auth headers. Raises `TokenExpiredError` on 401, `RappiAPIError` on other errors. Has optional `memory: MemoryManager` field.
+## How the Pieces Connect
 
-**MemoryManager** (`src/rappi/memory/manager.py`): Facade for SQLite persistence. All memory writes are best-effort (try/except pass) — never block the ordering flow.
+```
+Skills & Agent          (what Claude follows — workflow instructions)
+      |
+      v
+MCP Tools (22)          (what Claude calls — structured JSON in/out)
+      |
+      +------ Services Layer ------+---- CLI (terminal alternative)
+                  |
+          +-------+-------+
+          |               |
+    Rappi API        Memory (SQLite)
+    (internet)       (~/.rappi/rappi.db)
+```
+
+**Skills** tell Claude the workflow. **MCP tools** give Claude capabilities. **Services** contain business logic (shared by MCP and CLI). **Memory** makes it personal.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
+| `.claude-plugin/plugin.json` | Plugin manifest — name, version, author |
+| `.mcp.json` | Auto-registers `rappi-mcp` server in Claude Code |
+| `skills/order-food/SKILL.md` | Main skill — triggers on food/ordering requests |
+| `agents/rappi-agent.md` | Specialized agent with full Rappi API knowledge |
+| `src/rappi/mcp/server.py` | 22 MCP tools (the plugin's capabilities) |
+| `src/rappi/memory/manager.py` | MemoryManager facade (the plugin's brain) |
 | `src/rappi/constants.py` | ALL API endpoints and headers — single source of truth |
-| `src/rappi/client.py` | HTTP client with auth injection |
-| `src/rappi/services/cart.py` | Most complex service — compound IDs, topping objects, price fields |
-| `src/rappi/services/store.py` | Store detail + menu (separate API calls). Non-restaurant stores use search |
-| `src/rappi/cli/interactive.py` | The `rappi go` guided flow (~500 lines) |
-| `src/rappi/mcp/server.py` | 22 MCP tools |
-| `src/rappi/memory/manager.py` | MemoryManager facade |
-| `src/rappi/memory/db.py` | Schema DDL and migrations |
+| `src/rappi/services/cart.py` | Most complex service — compound IDs, toppings, prices |
+| `src/rappi/services/store.py` | Store detail + menu. Non-restaurant stores use search |
+| `src/rappi/cli/interactive.py` | `rappi go` guided terminal flow |
+| `src/rappi/memory/db.py` | SQLite schema DDL and migrations |
+
+## Skills
+
+Skills are markdown files with YAML frontmatter. Claude auto-invokes them based on the `description` field.
+
+| Skill | Trigger | Allowed Tools |
+|-------|---------|---------------|
+| `/order-food` | Food ordering, "I'm hungry", mentions Rappi | All 22 MCP tools + Bash |
+| `/rappi-search` | "Find restaurants", "search for pizza" | Search + menu tools |
+| `/rappi-reorder` | "Order the same", "reorder" | History + cart + checkout tools |
+
+### Adding a New Skill
+
+1. Create `skills/<name>/SKILL.md`
+2. Add frontmatter: `name`, `description`, `allowed-tools`
+3. Write workflow instructions in the body
+4. Auto-registers — no other files to change
+
+### MCP Tool Names in Skills
+
+Use namespaced format: `mcp__rappi__<tool_name>`. Wildcard: `mcp__rappi__*`.
 
 ## API Gotchas
 
 These are critical and easy to get wrong:
 
-1. **Store detail doesn't include menu**. The menu is at a SEPARATE endpoint: `/api/restaurant-bus/store/{id}/menu`. `get_store_detail()` in `services/store.py` fetches both and merges them.
+1. **Store detail doesn't include menu**. Menu is at a SEPARATE endpoint: `/api/restaurant-bus/store/{id}/menu`. `get_store_detail()` fetches both and merges.
 
-2. **Non-restaurant stores (Turbo, markets) have no menu endpoint**. Products are only discoverable via the unified search API. Use `search_store_products()`.
+2. **Non-restaurant stores (Turbo, markets) have no menu endpoint**. Products only via unified search. Use `search_store_products()`.
 
-3. **Cart product IDs must be compound format**: `"storeId_productId"` (string), not just the product ID.
+3. **Cart product IDs must be compound**: `"storeId_productId"` (string), not just the product ID.
 
-4. **Three price fields are mandatory**: `price`, `real_price`, `markup_price` must ALL be set. The API silently accepts $0 if missing.
+4. **Three price fields mandatory**: `price`, `real_price`, `markup_price` must ALL be set. API silently accepts $0.
 
 5. **Toppings must be objects**: `{id, description, units, price}` — not bare integers.
 
-6. **Trailing slashes required** on store detail and toppings endpoints. Without them you get 404.
+6. **Trailing slashes required** on store detail and toppings endpoints.
 
-7. **The API returns HTML in some fields** — `return_key` from checkout comes wrapped in `<b>` tags. We strip HTML via `utils/pricing.py:strip_html()`.
+7. **API returns HTML in fields** — `return_key` from checkout wrapped in `<b>` tags. Strip via `strip_html()`.
 
-8. **Checkout response has `None` values and separator rows** — filter them out when displaying.
+8. **Checkout response has `None` values** — filter separator rows when displaying.
 
-9. **`app-version` header** contains a commit hash that changes when Rappi deploys. If requests start failing with 403, update the hash in `constants.py` from browser DevTools.
+9. **`app-version` header** changes with Rappi deploys. Update hash in `constants.py` from browser DevTools if 403s appear.
 
 ## Store Types
 
-| Type | Menu Source | Cart store_type | Example |
+| Type | Menu Source | Cart store_type | Examples |
 |------|------------|-----------------|---------|
-| `restaurant` | `/api/restaurant-bus/store/{id}/menu` (corridors) | `"restaurant"` | El Corral, McDonald's |
-| `turbo` | Unified search (no menu endpoint) | `"turbo"` | Turbo convenience stores |
+| `restaurant` | `/api/restaurant-bus/store/{id}/menu` | `"restaurant"` | El Corral, McDonald's |
+| `turbo` | Unified search (no menu) | `"turbo"` | Turbo convenience |
 | `larebaja` | Unified search | varies | La Rebaja pharmacy |
 | Other markets | Unified search | varies | Carulla, Exito |
 
-The `StoreDetail.effective_store_type` property returns the correct type for cart/checkout URLs. The `StoreDetail.is_restaurant` property tells you which browse flow to use.
+`StoreDetail.is_restaurant` → which browse flow. `StoreDetail.effective_store_type` → cart/checkout URL type.
 
 ## Memory System
 
-SQLite at `~/.rappi/rappi.db`. Schema version tracked in `schema_version` table. Migrations in `memory/db.py`.
+SQLite at `~/.rappi/rappi.db`. All writes best-effort — never blocks ordering.
 
 **Tables**: orders, order_items, product_cache, store_cache, preferences, search_history, embeddings.
 
-**Repositories** (in `memory/repositories/`): One per domain. Accept `aiosqlite.Connection`, use parameterized SQL (no ORM).
+**Repositories** (`memory/repositories/`): One per domain, parameterized SQL, no ORM.
 
-**Embeddings** are optional. Enabled via `preferences.set("embeddings.enabled", True)`. Provider abstraction in `memory/embeddings.py`. Currently only `OpenAIEmbeddingProvider` (text-embedding-3-small). Vector storage as BLOB (packed float32). Cosine similarity in pure Python.
+**Embeddings**: Optional. Enable via `preferences.set("embeddings.enabled", True)`. `OpenAIEmbeddingProvider` (text-embedding-3-small). Vectors as BLOB. Cosine similarity in pure Python.
 
-## Adding a New Feature
+## Adding New Features
 
-**New API endpoint**: Add path to `constants.py:Endpoints`. Create/update service in `services/`. Add model in `models/` if needed.
+**New skill**: Create `skills/<name>/SKILL.md` with frontmatter + instructions.
 
-**New CLI command**: Create file in `cli/`, register in `cli/__init__.py` with `app.add_typer()`.
+**New MCP tool**: Add `@mcp.tool()` in `mcp/server.py`. Use `_client_with_memory()` for API+memory, `MemoryManager()` for memory-only.
 
-**New MCP tool**: Add `@mcp.tool()` function in `mcp/server.py`. Use `async with _client_with_memory() as (client, memory):` for tools needing both API + memory. Use `async with MemoryManager() as memory:` for memory-only tools. Use `async with RappiClient() as client:` for API-only tools.
+**New API endpoint**: Add to `constants.py:Endpoints`. Create/update service. Add model if needed.
 
-**New memory table**: Add DDL to `memory/db.py:SCHEMA_V1`. Increment `SCHEMA_VERSION`. Create repository in `memory/repositories/`. Add to `MemoryManager.__aenter__`.
+**New CLI command**: Create file in `cli/`, register in `cli/__init__.py`.
+
+**New memory table**: Add DDL to `memory/db.py`. Increment `SCHEMA_VERSION`. Create repository. Add to `MemoryManager.__aenter__`.
 
 ## Testing
 
 ```bash
-# Test MCP server tools load
+# Plugin loads
+uv run rappi --help
+
+# MCP tools
 uv run python -c "from rappi.mcp.server import mcp; print([t.name for t in mcp._tool_manager._tools.values()])"
 
-# Test memory system
+# Memory
 uv run python -c "
 import asyncio
 from rappi.memory import MemoryManager
@@ -112,74 +170,23 @@ async def t():
 asyncio.run(t())
 "
 
-# Test MCP with inspector
+# MCP inspector
 npx @modelcontextprotocol/inspector uv run rappi-mcp
 ```
-
-## Claude Code Plugin
-
-This project is a Claude Code Plugin. The plugin files live alongside the source code.
-
-### Plugin Structure
-
-| File | Purpose |
-|------|---------|
-| `.claude-plugin/plugin.json` | Manifest — name, version, author. Required for plugin recognition. |
-| `.mcp.json` | Auto-registers `rappi-mcp` as an MCP server when plugin is loaded. Claude Code reads this automatically. |
-| `skills/order-food/SKILL.md` | Main skill — `/order-food`. Triggers on food/ordering requests. Contains full workflow instructions for Claude. |
-| `skills/rappi-search/SKILL.md` | Search skill — `/rappi-search <query>`. Lightweight product lookup. |
-| `skills/rappi-reorder/SKILL.md` | Reorder skill — `/rappi-reorder`. Uses memory to re-add past order items. |
-| `agents/rappi-agent.md` | Specialized Sonnet agent with deep Rappi knowledge. Used by skills for complex flows. |
-| `.claude/settings.json` | SessionStart hook — checks auth status when project opens. |
-
-### How Skills Work
-
-Skills are markdown files with YAML frontmatter. The frontmatter controls:
-- `name` — slash command name (`/order-food`)
-- `description` — Claude uses this to decide when to auto-invoke the skill
-- `allowed-tools` — which tools the skill can use (MCP tools, Bash, Read, etc.)
-- `argument-hint` — shown in autocomplete
-
-The markdown body is the **prompt** Claude follows when the skill is invoked. It contains step-by-step instructions, error handling, and formatting rules.
-
-### Adding a New Skill
-
-1. Create `skills/<skill-name>/SKILL.md`
-2. Add frontmatter with `name`, `description`, `allowed-tools`
-3. Write the prompt body with workflow instructions
-4. The skill auto-registers — no changes to other files needed
-
-### MCP Tool Names in Skills
-
-When referencing MCP tools in skills, use the namespaced format: `mcp__rappi__<tool_name>`. Examples:
-- `mcp__rappi__search_restaurants`
-- `mcp__rappi__add_to_cart`
-- `mcp__rappi__checkout`
-- Wildcard: `mcp__rappi__*` (all Rappi tools)
-
-### Claude Desktop
-
-The MCP server is also configured for Claude Desktop at:
-`~/Library/Application Support/Claude/claude_desktop_config.json`
-
-Restart Claude Desktop after changes. The 22 MCP tools appear as available tools in conversations.
 
 ## Dependencies
 
 Core: `httpx`, `typer`, `rich`, `pydantic`, `mcp`, `playwright`, `aiosqlite`
-Optional: `openai` (for embeddings — `uv add openai`)
+Optional: `openai` (for embeddings)
 
 ## Data Locations
 
 | Path | Contents |
 |------|----------|
-| `~/.rappi/config.json` | Auth token, device ID, lat/lng |
-| `~/.rappi/rappi.db` | SQLite memory database |
-| `~/.rappi/rappi.db-wal` | SQLite write-ahead log (auto-managed) |
+| `~/.rappi/config.json` | Auth token, device ID, coordinates |
+| `~/.rappi/rappi.db` | Memory database (orders, cache, preferences) |
 | `.claude-plugin/plugin.json` | Plugin manifest |
-| `.mcp.json` | MCP server config (auto-loaded by Claude Code) |
-| `skills/` | Claude Code skills (slash commands) |
-| `agents/` | Claude Code agent definitions |
-| `.claude/settings.json` | Project-level hooks |
-| `~/Library/Application Support/Claude/claude_desktop_config.json` | Claude Desktop MCP config |
-| Project `.venv/` | Python virtual environment |
+| `.mcp.json` | MCP server config |
+| `skills/` | Plugin skills |
+| `agents/` | Plugin agents |
+| `.claude/settings.json` | Project hooks |

@@ -1,8 +1,8 @@
 {
   "name": "rappi",
-  "description": "Order food from Rappi via CLI or AI. Search restaurants, browse menus, manage cart, checkout, track orders — all from Claude.",
+  "description": "Rappi food delivery plugin for Claude. Order food through conversation — search restaurants, browse menus, customize orders, checkout, and track deliveries. Remembers your favorites, preferences, and order history.",
   "version": "0.1.0",
   "author": { "name": "Gabriel Garavit" },
-  "repository": "https://github.com/gabrielgaravit/rappi-cli",
+  "repository": "https://github.com/garavitgabriel/rappi-claude-plugin",
   "license": "MIT"
 }

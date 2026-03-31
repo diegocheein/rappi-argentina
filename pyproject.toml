@@ -1,7 +1,7 @@
 [project]
-name = "rappi-cli"
+name = "rappi-claude-plugin"
 version = "0.1.0"
-description = "Rappi food delivery CLI and MCP server"
+description = "Rappi food delivery plugin for Claude — order food through conversation"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
