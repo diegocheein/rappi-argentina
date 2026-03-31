@@ -40,6 +40,149 @@ mcp = FastMCP(
 )
 
 
+# --- Resources (workflow playbooks for any MCP client) ---
+
+
+@mcp.resource("rappi://workflow/ordering")
+async def ordering_workflow() -> str:
+    """Complete ordering workflow — the step-by-step playbook for placing an order."""
+    return """# Rappi Ordering Workflow
+
+Follow these steps in order. Skip steps that aren't needed.
+
+## Step 1: Context
+Call `get_ordering_context` FIRST. This returns:
+- User profile (name, Prime status)
+- Active delivery address
+- Current cart contents (if any)
+- Active orders being tracked
+- Memory summary (order count, last order, favorites)
+- Taste summary (one-line profile)
+
+If not authenticated, tell user to run `rappi auth login`.
+
+## Step 2: Find Food
+Choose based on what the user wants:
+- **Specific food/restaurant**: `search_restaurants(query)`
+- **Browse nearby**: `browse_restaurants(offset, limit)`
+- **Suggestions**: `get_recommendations(context)` — uses taste profile + time of day
+- **Reorder**: `get_order_history(limit)` then `quick_reorder(order_id)`
+- **Favorites**: `get_favorites()` then browse that store
+
+Search returns ALL store types (restaurants, Turbo, markets, pharmacies).
+Check the `store_type` field to know which kind of store it is.
+
+## Step 3: Browse Menu
+- **Restaurants** (store_type="restaurant"): `get_restaurant_menu(store_id)`
+- **Turbo/markets/pharmacies**: `search_in_store(store_id, query)` — no static menu
+- **Score items**: `score_menu(store_id)` ranks items by taste match
+
+If `get_restaurant_menu` returns empty categories with a "hint", use `search_in_store`.
+
+## Step 4: Toppings (IMPORTANT)
+If a product has `has_toppings=true`:
+1. Call `get_product_toppings(store_id, product_id)` BEFORE adding to cart
+2. Categories with `min_required > 0` are MANDATORY
+3. Present options to user, get their choices
+4. Include selected `topping_ids` in `add_to_cart`
+
+Skipping this for required toppings will cause `add_to_cart` to return an error.
+
+## Step 5: Add to Cart
+Call `add_to_cart(store_id, product_id, quantity, topping_ids)`.
+- Price and product details are auto-fetched (no need to pass them)
+- If error says "missing required toppings", go back to Step 4
+- Ask if user wants to add more items
+
+## Step 6: Checkout
+1. Call `checkout(tip_amount=0, confirm=false)` — PREVIEW ONLY
+2. Show the summary to the user (products, delivery fee, total)
+3. Check preferences for default tip: `get_preferences()`
+4. Ask user to confirm
+5. ONLY after explicit confirmation: `checkout(tip_amount=X, confirm=true)`
+6. NEVER place an order without user saying yes
+
+## Step 7: Track
+After placing: `get_order_status()` shows delivery state and ETA.
+Order states: created → in_store → on_the_way → delivered
+
+## Prices
+All prices are in COP (Colombian Pesos). Format with dots: $35.500 (not commas).
+
+## Error Recovery
+- Token expired → tell user to run `rappi auth login`
+- Store unavailable → suggest alternatives
+- Missing toppings → show which categories need selection
+- Product out of stock → suggest similar items from menu
+"""
+
+
+@mcp.resource("rappi://workflow/personalization")
+async def personalization_workflow() -> str:
+    """How to use the memory and intelligence features for personalized experiences."""
+    return """# Rappi Personalization Guide
+
+## Understanding the User
+Call `get_taste_profile()` to get the full computed profile:
+- Category preferences: what cuisines they like (with percentages)
+- Store type preferences: restaurant vs turbo vs market
+- Price range: average order, average item, min/max
+- Time patterns: when they order (morning/lunch/evening/night), which days
+- Topping preferences: what customizations they always pick
+- Top products: most reordered items
+- Top stores: most ordered from
+- Spending: total, average, tip habits, orders per week
+- Dietary restrictions and allergies
+
+## Making Recommendations
+Call `get_recommendations(context)` for scored suggestions:
+- "usual" — their regular order from specific stores (highest confidence)
+- "time_based" — stores they order from at this time of day
+- "similar_product" — products similar to their taste (requires embeddings)
+- "new_store" — stores they haven't tried matching their preferences
+
+Always respect dietary_restrictions and allergies from the profile.
+
+## Scoring Menus
+After fetching a menu, call `score_menu(store_id)` to rank items by taste match.
+Present highest-scored items first: "Based on your taste, I'd recommend..."
+
+## Memory Tools
+- `get_order_history(limit)` — what they've ordered before
+- `get_favorites()` — explicitly saved stores
+- `get_preferences()` — dietary, allergies, default tip
+- `set_preference(key, value)` — save new preferences
+- `smart_search(query)` — search across cached products by meaning
+
+## Embeddings
+If embeddings are enabled (check `get_ordering_context` → memory.embeddings_enabled):
+- `smart_search` uses semantic matching ("something refreshing" finds Sprite)
+- `score_menu` ranks by cosine similarity to taste vector
+- `get_recommendations` includes similar_product suggestions
+If disabled, all features fall back to SQL keyword/frequency matching.
+"""
+
+
+@mcp.resource("rappi://info/store-types")
+async def store_types_info() -> str:
+    """How different store types work on Rappi."""
+    return """# Rappi Store Types
+
+| Type | Examples | How to Browse | Cart URL Type |
+|------|----------|--------------|---------------|
+| restaurant | El Corral, McDonald's | `get_restaurant_menu(store_id)` — returns categories with products | "restaurant" |
+| turbo | Turbo convenience stores | `search_in_store(store_id, query)` — no static menu | "turbo" |
+| larebaja | La Rebaja pharmacy | `search_in_store(store_id, query)` | varies |
+| markets | Carulla, Exito | `search_in_store(store_id, query)` | varies |
+
+Key differences:
+- Restaurants have menu corridors (categories like "Hamburguesas", "Bebidas")
+- Non-restaurant stores have thousands of SKUs, only searchable — no browse menu
+- Store type appears in search results as `store_type` field
+- The store type determines which URL path the cart/checkout API uses
+"""
+
+
 # --- Helpers ---
 
 
