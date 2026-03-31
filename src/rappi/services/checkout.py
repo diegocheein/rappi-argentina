@@ -1,0 +1,38 @@
+"""Checkout and payment services."""
+
+from rappi.client import RappiClient
+from rappi.constants import Endpoints
+from rappi.models.order import CheckoutDetail
+
+
+async def get_checkout_detail(
+    client: RappiClient, store_type: str = "restaurant"
+) -> CheckoutDetail:
+    """Get checkout summary with price breakdown and return_key."""
+    path = Endpoints.CHECKOUT_DETAIL.format(store_type=store_type)
+    data = await client.get(path)
+    return CheckoutDetail(**data)
+
+
+async def set_tip(
+    client: RappiClient, tip_amount: int, store_type: str = "restaurant"
+) -> None:
+    """Set the delivery tip amount. Use 0 to remove tip."""
+    path = Endpoints.SET_TIP.format(store_type=store_type)
+    await client.put(path, json={"tip": tip_amount})
+
+
+async def set_payment_method(
+    client: RappiClient, payment_data: dict, store_type: str = "restaurant"
+) -> None:
+    """Set the payment method for checkout."""
+    path = Endpoints.SET_PAYMENT_METHOD.format(store_type=store_type)
+    await client.put(path, json=payment_data)
+
+
+async def place_order(
+    client: RappiClient, return_key: str, store_type: str = "restaurant"
+) -> dict:
+    """Place the order. Requires return_key from checkout detail."""
+    path = Endpoints.PLACE_ORDER.format(store_type=store_type)
+    return await client.post(path, json={"return_key": return_key})

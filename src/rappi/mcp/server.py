@@ -1,0 +1,699 @@
+"""Rappi MCP server — exposes Rappi services as tools for AI assistants."""
+
+from contextlib import asynccontextmanager
+
+from rappi.client import RappiClient
+from rappi.memory import MemoryManager
+from rappi.models.store import Product, StoreDetail, ToppingCategory
+from rappi.services.address import list_addresses as _list_addresses
+from rappi.services.address import set_active_address as _set_active_address
+from rappi.services.auth import get_profile as _get_profile
+from rappi.services.auth import is_prime as _is_prime
+from rappi.services.cart import add_to_cart as _add_to_cart
+from rappi.services.cart import get_carts as _get_carts
+from rappi.services.cart import recalculate_cart as _recalculate_cart
+from rappi.services.cart import remove_from_cart as _remove_from_cart
+from rappi.services.checkout import get_checkout_detail as _get_checkout_detail
+from rappi.services.checkout import place_order as _place_order
+from rappi.services.checkout import set_tip as _set_tip
+from rappi.services.order import get_orders as _get_orders
+from rappi.services.search import search as _search
+from rappi.services.store import get_product_toppings as _get_toppings
+from rappi.services.store import get_restaurant_catalog as _get_catalog
+from rappi.services.store import get_store_detail as _get_store_detail
+from rappi.services.store import search_store_products as _search_store_products
+from rappi.utils.ids import make_compound_id
+
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP(
+    "rappi",
+    instructions=(
+        "Rappi food delivery tools for searching restaurants, browsing menus, "
+        "managing a cart, and placing orders in Colombia (prices in COP).\n\n"
+        "WORKFLOW: Start with get_ordering_context to understand current state. "
+        "Then: search_restaurants or browse_restaurants -> get_restaurant_menu -> "
+        "get_product_toppings (if has_toppings=true) -> add_to_cart -> "
+        "checkout(confirm=false) to preview -> checkout(confirm=true) to place.\n\n"
+        "The user must authenticate first via `rappi auth login` in their terminal."
+    ),
+)
+
+
+# --- Helpers ---
+
+
+@asynccontextmanager
+async def _client_with_memory():
+    """Create a RappiClient with MemoryManager for MCP tool calls."""
+    async with MemoryManager() as memory:
+        async with RappiClient(memory=memory) as client:
+            yield client, memory
+
+
+def _find_product(store: StoreDetail, product_id: int) -> Product | None:
+    """Find a product in a store's menu corridors."""
+    for corridor in store.corridors:
+        for p in corridor.products:
+            if p.id == product_id:
+                return p
+    return None
+
+
+def _validate_toppings(
+    categories: list[ToppingCategory], selected_ids: list[int]
+) -> dict:
+    """Check that all required topping categories have enough selections."""
+    missing = []
+    for cat in categories:
+        if cat.min_toppings_for_categories > 0:
+            cat_topping_ids = {t.id for t in cat.toppings}
+            selected_in_cat = [tid for tid in selected_ids if tid in cat_topping_ids]
+            if len(selected_in_cat) < cat.min_toppings_for_categories:
+                missing.append({
+                    "category_id": cat.id,
+                    "category_name": cat.description,
+                    "min_required": cat.min_toppings_for_categories,
+                    "selected_count": len(selected_in_cat),
+                    "available_toppings": [
+                        {"id": t.id, "name": t.description, "price": t.price}
+                        for t in cat.toppings
+                        if t.is_available
+                    ],
+                })
+    return {"valid": len(missing) == 0, "missing": missing}
+
+
+# --- Tools ---
+
+
+@mcp.tool()
+async def get_ordering_context() -> dict:
+    """Get a snapshot of the user's current state: active address, cart contents, and active orders.
+
+    When to use: Call this FIRST at the start of any ordering conversation to understand
+    where the user is in the process before making suggestions.
+    Next step: Based on the state, suggest searching for restaurants, continuing checkout, or tracking orders.
+    """
+    async with _client_with_memory() as (client, memory):
+        profile = await _get_profile(client)
+        prime = await _is_prime(client)
+        addresses = await _list_addresses(client)
+        active_addr = next((a for a in addresses if a.active), None)
+        carts = await _get_carts(client)
+        orders = await _get_orders(client)
+
+        cart_summary = None
+        if carts:
+            all_items = []
+            for cart in carts:
+                for store in cart.stores:
+                    for p in store.products:
+                        all_items.append({"name": p.name, "quantity": p.units, "price": p.total})
+            total = sum(c.sub_total for c in carts)
+            if all_items:
+                cart_summary = {"items": all_items, "total": total}
+
+        # Memory context
+        memory_summary = {}
+        try:
+            memory_summary = await memory.get_memory_summary()
+        except Exception:
+            pass
+
+        return {
+            "user": {"name": profile.name, "is_prime": prime.is_prime},
+            "active_address": {
+                "id": active_addr.id,
+                "title": active_addr.title or active_addr.tag,
+                "address": active_addr.address,
+            } if active_addr else None,
+            "cart": cart_summary,
+            "memory": memory_summary,
+            "active_orders": [
+                {
+                    "id": o.id,
+                    "store": o.store.name if o.store else None,
+                    "state": o.state,
+                    "eta": o.eta,
+                }
+                for o in orders.active_orders
+            ],
+        }
+
+
+@mcp.tool()
+async def auth_status() -> dict:
+    """Check if the Rappi auth token is valid and return user profile.
+
+    When to use: When the user asks about their account or you need to verify auth works.
+    Next step: If authenticated, use get_ordering_context for full state.
+    """
+    async with RappiClient() as client:
+        profile = await _get_profile(client)
+        prime = await _is_prime(client)
+        return {
+            "authenticated": True,
+            "name": profile.name,
+            "email": profile.email,
+            "is_prime": prime.is_prime,
+        }
+
+
+@mcp.tool()
+async def list_delivery_addresses() -> dict:
+    """List all saved delivery addresses. The active address determines which restaurants appear.
+
+    When to use: When the user wants to check or switch their delivery location.
+    Next step: Use set_delivery_address to switch, then search or browse restaurants.
+    """
+    async with RappiClient() as client:
+        addresses = await _list_addresses(client)
+        return {
+            "addresses": [
+                {
+                    "id": a.id,
+                    "title": a.title or a.tag,
+                    "address": a.address,
+                    "active": a.active,
+                    "lat": a.lat,
+                    "lng": a.lng,
+                }
+                for a in addresses
+            ]
+        }
+
+
+@mcp.tool()
+async def set_delivery_address(address_id: int) -> dict:
+    """Set which address to deliver to. This affects which restaurants are available.
+
+    When to use: When the user wants to switch delivery location.
+    Next step: Search or browse restaurants for the new location.
+    """
+    async with RappiClient() as client:
+        await _set_active_address(client, address_id)
+        return {"success": True, "address_id": address_id}
+
+
+@mcp.tool()
+async def search_restaurants(query: str) -> dict:
+    """Search for restaurants, stores, and products matching a query.
+
+    Returns ALL store types: restaurants, Turbo (convenience), markets, pharmacies, etc.
+    The store_type field tells you what kind of store it is.
+
+    When to use: The user asks for a specific food, product, or store by name.
+    Next step: For restaurants (store_type="restaurant"), use get_restaurant_menu.
+    For other stores (Turbo, markets), use search_in_store to find more products.
+    Or use add_to_cart directly if the user wants a product from the results.
+    """
+    async with RappiClient() as client:
+        stores = await _search(client, query)
+        return {
+            "stores": [
+                {
+                    "store_id": s.store_id,
+                    "store_name": s.store_name,
+                    "store_type": s.store_type,
+                    "eta": s.eta,
+                    "shipping_cost": s.shipping_cost,
+                    "products": [
+                        {
+                            "product_id": p.product_id,
+                            "name": p.name,
+                            "price": p.price,
+                            "in_stock": p.in_stock,
+                            "has_toppings": p.has_toppings,
+                        }
+                        for p in s.products
+                    ],
+                }
+                for s in stores
+            ]
+        }
+
+
+@mcp.tool()
+async def search_in_store(store_id: int, query: str) -> dict:
+    """Search for products within a specific store.
+
+    This is the primary way to browse non-restaurant stores (Turbo, markets, pharmacies)
+    which don't have a static menu. Results are grouped by category.
+
+    When to use: When the user wants to find products in a specific Turbo, market, or other
+    non-restaurant store. Also useful for searching within a restaurant.
+    Next step: Use add_to_cart with the store_id and product_id from the results.
+    """
+    async with RappiClient() as client:
+        corridors = await _search_store_products(client, store_id, query)
+        return {
+            "categories": [
+                {
+                    "name": c.name,
+                    "products": [
+                        {
+                            "id": p.id,
+                            "name": p.name,
+                            "description": p.description,
+                            "price": p.price,
+                            "in_stock": p.in_stock,
+                        }
+                        for p in c.products
+                    ],
+                }
+                for c in corridors
+            ]
+        }
+
+
+@mcp.tool()
+async def browse_restaurants(offset: int = 0, limit: int = 20) -> dict:
+    """Browse nearby restaurants without searching. Returns a paginated list sorted by relevance.
+
+    When to use: The user wants to see what's available nearby without a specific query.
+    Next step: Use get_restaurant_menu with a store_id to see the full menu.
+    """
+    async with RappiClient() as client:
+        stores = await _get_catalog(client, offset=offset, limit=limit)
+        return {
+            "stores": [
+                {
+                    "store_id": s.store_id,
+                    "name": s.name,
+                    "rating": s.score,
+                    "eta": s.eta,
+                    "shipping_cost": s.shipping_cost,
+                    "is_available": s.is_available,
+                }
+                for s in stores
+            ]
+        }
+
+
+@mcp.tool()
+async def get_restaurant_menu(store_id: int) -> dict:
+    """Get the full menu for a store, organized by category.
+
+    Works for restaurants (returns menu corridors). For non-restaurant stores
+    (Turbo, markets) this may return an empty menu — use search_in_store instead.
+
+    When to use: After the user picks a restaurant from search/browse results.
+    Next step: If a product has has_toppings=true, call get_product_toppings before adding to cart.
+    If categories is empty, use search_in_store to find products.
+    """
+    async with RappiClient() as client:
+        store = await _get_store_detail(client, store_id)
+        result = {
+            "store_id": store.store_id,
+            "name": store.name,
+            "store_type": store.effective_store_type,
+            "status": store.status.status if store.status else "unknown",
+            "categories": [
+                {
+                    "name": c.name,
+                    "products": [
+                        {
+                            "id": p.id,
+                            "name": p.name,
+                            "description": p.description,
+                            "price": p.price,
+                            "in_stock": p.in_stock,
+                            "has_toppings": p.has_toppings,
+                        }
+                        for p in c.products
+                    ],
+                }
+                for c in store.corridors
+            ],
+        }
+        if not store.corridors and not store.is_restaurant:
+            result["hint"] = (
+                f"This is a {store.effective_store_type} store with no static menu. "
+                "Use search_in_store to find products."
+            )
+        return result
+
+
+@mcp.tool()
+async def get_product_toppings(store_id: int, product_id: int) -> dict:
+    """Get available toppings/customizations for a product.
+
+    When to use: Before adding a product that has has_toppings=true. REQUIRED for products
+    with mandatory topping categories (min_required > 0).
+    Next step: Pass the selected topping IDs to add_to_cart.
+    """
+    async with RappiClient() as client:
+        result = await _get_toppings(client, store_id, product_id)
+        return {
+            "categories": [
+                {
+                    "id": cat.id,
+                    "description": cat.description,
+                    "type": cat.topping_type_id,
+                    "min_required": cat.min_toppings_for_categories,
+                    "max_allowed": cat.max_toppings_for_categories,
+                    "toppings": [
+                        {
+                            "id": t.id,
+                            "description": t.description,
+                            "price": t.price,
+                            "available": t.is_available,
+                        }
+                        for t in cat.toppings
+                    ],
+                }
+                for cat in result.categories
+            ]
+        }
+
+
+@mcp.tool()
+async def add_to_cart(
+    store_id: int,
+    product_id: int,
+    quantity: int = 1,
+    topping_ids: list[int] | None = None,
+) -> dict:
+    """Add a product to the cart. Price and details are automatically fetched.
+
+    IMPORTANT: If a product has required toppings (min_required > 0 in get_product_toppings),
+    you MUST provide topping_ids for those categories. Otherwise this returns an error
+    explaining which categories need selections.
+
+    When to use: After the user picks a product and (if needed) customizations.
+    Next step: Ask if they want to add more items, or use checkout to review/place the order.
+    """
+    async with RappiClient() as client:
+        store = await _get_store_detail(client, store_id)
+        product = _find_product(store, product_id)
+
+        if not product:
+            return {"error": f"Product {product_id} not found in store {store_id}"}
+
+        if not product.in_stock:
+            return {"error": f"'{product.name}' is currently out of stock"}
+
+        # Validate toppings for products that require them
+        selected_toppings = []
+        if product.has_toppings:
+            toppings_resp = await _get_toppings(client, store_id, product_id)
+
+            # Check required toppings are provided
+            validation = _validate_toppings(toppings_resp.categories, topping_ids or [])
+            if not validation["valid"]:
+                return {
+                    "error": "Missing required toppings",
+                    "missing_categories": validation["missing"],
+                    "hint": "Call get_product_toppings first, then provide topping_ids for all required categories.",
+                }
+
+            # Resolve topping objects
+            if topping_ids:
+                topping_map = {}
+                for cat in toppings_resp.categories:
+                    for t in cat.toppings:
+                        topping_map[t.id] = t
+                selected_toppings = [topping_map[tid] for tid in topping_ids if tid in topping_map]
+
+        carts = await _add_to_cart(client, store_id, product, selected_toppings, quantity)
+        total_items = sum(p.units for cart in carts for s in cart.stores for p in s.products)
+        total_price = sum(cart.sub_total for cart in carts)
+        return {
+            "success": True,
+            "product": product.name,
+            "quantity": quantity,
+            "unit_price": product.price,
+            "cart_items": total_items,
+            "cart_total": total_price,
+        }
+
+
+@mcp.tool()
+async def view_cart() -> dict:
+    """View current cart contents with items, quantities, prices, and totals.
+
+    When to use: When the user wants to see what's in their cart before checking out.
+    Next step: Use checkout(confirm=false) to preview the order, or remove_from_cart to remove items.
+    """
+    async with RappiClient() as client:
+        carts = await _get_carts(client)
+        if not carts:
+            return {"empty": True, "stores": []}
+        result_stores = []
+        for cart in carts:
+            for store in cart.stores:
+                result_stores.append({
+                    "store_id": store.id,
+                    "store_name": store.name,
+                    "is_open": store.is_open,
+                    "products": [
+                        {
+                            "id": p.id,
+                            "name": p.name,
+                            "quantity": p.units,
+                            "price": p.price,
+                            "total": p.total,
+                        }
+                        for p in store.products
+                    ],
+                    "product_total": store.product_total,
+                    "shipping": store.charge_total,
+                    "total": store.total,
+                })
+        return {"empty": False, "stores": result_stores}
+
+
+@mcp.tool()
+async def remove_from_cart(store_id: int, product_id: int) -> dict:
+    """Remove a product from the cart.
+
+    When to use: When the user wants to remove a specific item.
+    Next step: Use view_cart to show updated contents.
+    """
+    compound_id = make_compound_id(store_id, product_id)
+    async with RappiClient() as client:
+        await _remove_from_cart(client, compound_id)
+        return {"success": True, "removed": compound_id}
+
+
+@mcp.tool()
+async def checkout(tip_amount: int = 0, confirm: bool = False) -> dict:
+    """Preview checkout summary or place the order.
+
+    IMPORTANT: Always call with confirm=False first to show the summary to the user.
+    Only call with confirm=True after the user explicitly approves.
+
+    When to use: After the user is done adding items and wants to review or place the order.
+    Next step: If preview, show the summary and ask user to confirm. If placed, use get_order_status to track.
+    """
+    async with RappiClient() as client:
+        await _recalculate_cart(client)
+
+        if tip_amount > 0:
+            await _set_tip(client, tip_amount)
+
+        detail = await _get_checkout_detail(client)
+
+        summary = []
+        for s in detail.summary:
+            items = [{"type": d.type, "label": d.key, "value": d.value} for d in s.details]
+            summary.append({
+                "store": s.header.title if s.header else None,
+                "items": items,
+            })
+
+        if not confirm:
+            return {"preview": True, "summary": summary, "return_key_available": bool(detail.return_key)}
+
+        if not detail.return_key:
+            return {"error": "No return_key — cannot place order. Cart may be empty or invalid."}
+
+        result = await _place_order(client, detail.return_key)
+        return {"placed": True, "summary": summary, "result": result}
+
+
+@mcp.tool()
+async def get_order_status() -> dict:
+    """Get active and cancelled orders with their current status.
+
+    When to use: After placing an order, or when the user asks about their order status.
+    Order states: created -> in_store -> on_the_way -> delivered (or cancelled).
+    """
+    async with RappiClient() as client:
+        result = await _get_orders(client)
+        return {
+            "active_orders": [
+                {
+                    "id": o.id,
+                    "store": o.store.name if o.store else None,
+                    "state": o.state,
+                    "total": o.total,
+                    "eta": o.eta,
+                    "tip": o.tip,
+                    "can_cancel": o.can_be_cancel,
+                }
+                for o in result.active_orders
+            ],
+            "cancelled_orders": [
+                {"id": o.id, "store": o.store.name if o.store else None}
+                for o in result.cancel_orders
+            ],
+        }
+
+
+# --- Memory tools ---
+
+
+@mcp.tool()
+async def get_order_history(limit: int = 10) -> dict:
+    """Get past orders with store names, items, totals, and dates from local memory.
+
+    When to use: User asks "what did I order last time?" or "show my order history".
+    Next step: Use quick_reorder to re-add items from a past order.
+    """
+    async with MemoryManager() as memory:
+        orders = await memory.orders.list_recent(limit=limit)
+        return {
+            "orders": [
+                {
+                    "id": o.id,
+                    "store": o.store_name,
+                    "store_type": o.store_type,
+                    "total": o.total,
+                    "tip": o.tip,
+                    "state": o.state,
+                    "date": o.placed_at,
+                    "items": o.items or [],
+                }
+                for o in orders
+            ]
+        }
+
+
+@mcp.tool()
+async def get_favorites() -> dict:
+    """Get the user's favorite stores.
+
+    When to use: User asks for favorites or wants to quickly pick a restaurant.
+    Next step: Use get_restaurant_menu or search_in_store for a favorite.
+    """
+    async with MemoryManager() as memory:
+        store_ids = await memory.preferences.get_favorite_store_ids()
+        stores = []
+        for sid in store_ids:
+            cached = await memory.stores.get(sid, ttl_hours=99999)
+            stores.append({
+                "store_id": sid,
+                "name": cached["name"] if cached else None,
+                "store_type": cached.get("store_type") if cached else None,
+            })
+        return {"favorites": stores}
+
+
+@mcp.tool()
+async def add_favorite(store_id: int) -> dict:
+    """Mark a store as a favorite for quick access later.
+
+    When to use: User says "save this restaurant" or "add to favorites".
+    """
+    async with MemoryManager() as memory:
+        await memory.preferences.add_favorite_store(store_id)
+        return {"success": True, "store_id": store_id}
+
+
+@mcp.tool()
+async def remove_favorite(store_id: int) -> dict:
+    """Remove a store from favorites."""
+    async with MemoryManager() as memory:
+        await memory.preferences.remove_favorite_store(store_id)
+        return {"success": True, "store_id": store_id}
+
+
+@mcp.tool()
+async def quick_reorder(order_id: int) -> dict:
+    """Re-add all items from a past order to the cart.
+
+    When to use: User says "order the same thing as last time" or "reorder".
+    Next step: Use checkout to review and place the order.
+    """
+    async with _client_with_memory() as (client, memory):
+        order = await memory.orders.get_by_id(order_id)
+        if not order:
+            return {"error": f"Order {order_id} not found in history"}
+
+        if not order.items:
+            return {"error": "No items found for this order"}
+
+        # Get store detail to fetch current prices
+        store = await _get_store_detail(client, order.store_id)
+
+        added = []
+        failed = []
+        for item in order.items:
+            product = _find_product(store, int(item["product_id"]))
+            if product and product.in_stock:
+                try:
+                    await _add_to_cart(
+                        client, order.store_id, product, [],
+                        item.get("quantity", 1),
+                        store_type=store.effective_store_type,
+                    )
+                    added.append(item["name"])
+                except Exception:
+                    failed.append(item["name"])
+            else:
+                failed.append(f"{item['name']} (unavailable)")
+
+        return {
+            "success": True,
+            "store": order.store_name,
+            "added": added,
+            "failed": failed,
+        }
+
+
+@mcp.tool()
+async def get_preferences() -> dict:
+    """Get user preferences: dietary restrictions, allergies, default tip.
+
+    When to use: When making food recommendations or setting up checkout.
+    """
+    async with MemoryManager() as memory:
+        return await memory.preferences.get_all()
+
+
+@mcp.tool()
+async def set_preference(key: str, value: str) -> dict:
+    """Set a user preference.
+
+    Keys: default_tip (int), dietary_restrictions (comma-separated), allergies (comma-separated).
+    When to use: User says "I'm vegetarian", "always tip 5000", or "I'm allergic to peanuts".
+    """
+    async with MemoryManager() as memory:
+        if key == "default_tip":
+            await memory.preferences.set_default_tip(int(value))
+        elif key == "dietary_restrictions":
+            await memory.preferences.set_dietary_restrictions([v.strip() for v in value.split(",")])
+        elif key == "allergies":
+            await memory.preferences.set_allergies([v.strip() for v in value.split(",")])
+        else:
+            await memory.preferences.set(key, value)
+        return {"success": True, "key": key, "value": value}
+
+
+@mcp.tool()
+async def smart_search(query: str, limit: int = 10) -> dict:
+    """Search across cached products, order history, and favorites using
+    text matching — or semantic search if embeddings are enabled.
+
+    When to use: User asks vague things like "that spicy chicken thing from last week"
+    or "something sweet". Falls back to keyword search if embeddings are not configured.
+    """
+    async with MemoryManager() as memory:
+        results = await memory.smart_search(query, limit=limit)
+        return {"results": results}
+
+
+def main():
+    mcp.run(transport="stdio")

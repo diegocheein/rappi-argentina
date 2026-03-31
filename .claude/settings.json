@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project . rappi auth status 2>/dev/null | head -1 && echo 'Rappi MCP tools are available.' || echo 'Rappi CLI: not authenticated. User should run: rappi auth login'"
+          }
+        ]
+      }
+    ]
+  }
+}
