@@ -165,6 +165,9 @@ class InteractiveSession:
         if has_favorites:
             self.con.print("  [bold cyan]4.[/bold cyan] Pick a favorite")
             choices.append("4")
+        if has_history:
+            self.con.print("  [bold cyan]5.[/bold cyan] Suggested for you")
+            choices.append("5")
 
         self.con.print()
         mode = Prompt.ask("Choice", choices=choices, default="1")
@@ -177,6 +180,8 @@ class InteractiveSession:
             return await self._reorder_flow()
         elif mode == "4":
             return await self._favorites_flow()
+        elif mode == "5":
+            return await self._suggestions_flow()
         else:
             stores = []
 
@@ -274,6 +279,80 @@ class InteractiveSession:
             f"[bold]{store_detail.name}[/bold]\nStatus: [{status_color}]{status}[/{status_color}]",
             expand=False,
         ))
+
+    async def _suggestions_flow(self) -> None:
+        """Show smart recommendations based on taste profile and time."""
+        self.con.print("\n[dim]Analyzing your taste profile...[/dim]")
+
+        try:
+            recs = await self._memory.get_recommendations()
+        except Exception:
+            self.con.print("[yellow]Not enough order history for suggestions yet.[/yellow]")
+            return await self.step_find_store()
+
+        if not recs.recommendations:
+            self.con.print("[yellow]Not enough data for suggestions. Order a few times first![/yellow]")
+            return await self.step_find_store()
+
+        if recs.profile_summary:
+            self.con.print(f"[dim]{recs.profile_summary}[/dim]\n")
+
+        self.con.print("[bold]Suggested for you:[/bold]")
+        display_recs = recs.recommendations[:6]
+        for i, rec in enumerate(display_recs, 1):
+            type_icons = {"usual": "[*]", "time_based": "[~]", "new_store": "[+]", "budget_alert": "[$]"}
+            icon = type_icons.get(rec.type, "[ ]")
+            conf = f"[dim]({rec.confidence:.0%})[/dim]" if rec.confidence > 0 else ""
+            self.con.print(f"  [bold cyan]{i}.[/bold cyan] {icon} [bold]{rec.title}[/bold] {conf}")
+            self.con.print(f"       [dim]{rec.description}[/dim]")
+
+        self.con.print()
+        choice = IntPrompt.ask(
+            f"Pick a suggestion [1-{len(display_recs)}]",
+            choices=[str(i) for i in range(1, len(display_recs) + 1)],
+        )
+        picked = display_recs[choice - 1]
+
+        if picked.type == "usual" and picked.items and picked.store_id:
+            # Reorder the usual
+            self.con.print(f"[dim]Loading {picked.store_name}...[/dim]")
+            store_detail = await get_store_detail(self.client, picked.store_id)
+            self.state.current_store = store_detail
+
+            added = []
+            for item in picked.items:
+                from rappi.mcp.server import _find_product
+                product = _find_product(store_detail, int(item["product_id"]))
+                if product and product.in_stock:
+                    try:
+                        carts = await add_to_cart(
+                            self.client, store_detail.store_id, product, [],
+                            item.get("quantity", 1),
+                            store_type=store_detail.effective_store_type,
+                        )
+                        self.state.carts = carts
+                        added.append(f"{item.get('quantity', 1)}x {item['name']}")
+                    except Exception:
+                        pass
+
+            if added:
+                self.con.print(f"\n[green]Added your usual:[/green] {', '.join(added)}")
+                render_cart_summary_bar(self.con, self.state.cart_item_count, self.state.cart_total)
+            else:
+                self.con.print("[yellow]Couldn't add items — store may be closed.[/yellow]")
+
+        elif picked.store_id:
+            # Browse the suggested store
+            self.con.print(f"[dim]Loading {picked.store_name}...[/dim]")
+            store_detail = await get_store_detail(self.client, picked.store_id)
+            self.state.current_store = store_detail
+
+            status = store_detail.status.status if store_detail.status else "unknown"
+            status_color = "green" if status == "open" else "red"
+            self.con.print(Panel(
+                f"[bold]{store_detail.name}[/bold]\nStatus: [{status_color}]{status}[/{status_color}]",
+                expand=False,
+            ))
 
     async def _search_flow(self) -> list:
         """Prompt for query, search, return stores."""

@@ -7,6 +7,7 @@ from pathlib import Path
 import aiosqlite
 
 from rappi.memory.db import DB_PATH, get_connection, migrate
+from rappi.memory.intelligence import IntelligenceEngine
 from rappi.memory.repositories.orders import OrderRepository
 from rappi.memory.repositories.preferences import PreferencesRepository
 from rappi.memory.repositories.products import ProductCacheRepository
@@ -30,6 +31,7 @@ class MemoryManager:
         self.stores: StoreCacheRepository
         self.preferences: PreferencesRepository
         self.search: SearchHistoryRepository
+        self.intelligence: IntelligenceEngine
 
     async def __aenter__(self) -> MemoryManager:
         self._db = await get_connection(self._db_path)
@@ -39,6 +41,7 @@ class MemoryManager:
         self.stores = StoreCacheRepository(self._db)
         self.preferences = PreferencesRepository(self._db)
         self.search = SearchHistoryRepository(self._db)
+        self.intelligence = IntelligenceEngine(self._db)
         return self
 
     async def __aexit__(self, *exc) -> None:
@@ -191,6 +194,26 @@ class MemoryManager:
             return len(items)
         except Exception:
             return 0
+
+    async def get_taste_profile(self):
+        """Compute the user's taste profile from order history."""
+        from rappi.models.intelligence import TasteProfile
+        dietary = await self.preferences.get_dietary_restrictions()
+        allergies = await self.preferences.get_allergies()
+        embeddings_enabled = await self.preferences.get("embeddings.enabled", False)
+        return await self.intelligence.compute_taste_profile(
+            dietary_restrictions=dietary,
+            allergies=allergies,
+            include_taste_vector=embeddings_enabled,
+        )
+
+    async def get_recommendations(self, context: dict | None = None):
+        """Get smart recommendations based on taste profile and context."""
+        return await self.intelligence.get_recommendations(context)
+
+    async def get_taste_summary(self) -> str:
+        """One-line taste profile summary."""
+        return await self.intelligence.get_taste_summary()
 
     async def get_memory_summary(self) -> dict:
         """Get a quick summary of what's in memory — useful for MCP context."""

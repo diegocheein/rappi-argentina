@@ -116,8 +116,10 @@ async def get_ordering_context() -> dict:
 
         # Memory context
         memory_summary = {}
+        taste_summary = ""
         try:
             memory_summary = await memory.get_memory_summary()
+            taste_summary = await memory.get_taste_summary()
         except Exception:
             pass
 
@@ -130,6 +132,7 @@ async def get_ordering_context() -> dict:
             } if active_addr else None,
             "cart": cart_summary,
             "memory": memory_summary,
+            "taste_summary": taste_summary,
             "active_orders": [
                 {
                     "id": o.id,
@@ -693,6 +696,44 @@ async def smart_search(query: str, limit: int = 10) -> dict:
     async with MemoryManager() as memory:
         results = await memory.smart_search(query, limit=limit)
         return {"results": results}
+
+
+@mcp.tool()
+async def get_taste_profile() -> dict:
+    """Get the user's computed taste profile based on their entire order history.
+
+    Returns: category preferences (what cuisines they like), store type preferences,
+    price range, time-of-day patterns, topping preferences, top products/stores,
+    spending summary, dietary restrictions, and allergies.
+
+    When to use: User asks "what do I usually order?", "what are my food habits?",
+    or when you need context to make personalized food recommendations.
+    Next step: Use this to inform search queries and restaurant suggestions.
+    """
+    async with MemoryManager() as memory:
+        profile = await memory.get_taste_profile()
+        return profile.model_dump()
+
+
+@mcp.tool()
+async def get_recommendations(context: str | None = None) -> dict:
+    """Get smart food recommendations based on the user's taste profile, current time,
+    and order history.
+
+    Returns scored recommendations: "the usual" orders, time-appropriate stores,
+    stores they haven't tried yet.
+
+    Args:
+        context: Optional hint like "lunch", "quick snack", "something cheap".
+
+    When to use: User asks "what should I eat?", "suggest something", "I'm hungry",
+    or at the start of a conversation to proactively offer relevant options.
+    Next step: Use the store_id from a recommendation with get_restaurant_menu or quick_reorder.
+    """
+    async with MemoryManager() as memory:
+        ctx = {"raw_context": context} if context else None
+        result = await memory.get_recommendations(ctx)
+        return result.model_dump()
 
 
 def main():

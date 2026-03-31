@@ -712,7 +712,7 @@ wheels = [
 ]
 
 [[package]]
-name = "rappi-cli"
+name = "rappi-claude-plugin"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
