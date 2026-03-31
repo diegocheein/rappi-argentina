@@ -17,7 +17,7 @@ You: "Looks good, place it"
 Claude: *places the order, tracks delivery*
 ```
 
-The plugin gives Claude 22 tools to interact with Rappi, 3 skills for common workflows, a specialized ordering agent, and a local memory system that learns your preferences over time.
+The plugin gives Claude 25 tools to interact with Rappi, 4 skills for common workflows, a specialized ordering agent, and a local memory system that learns your preferences over time.
 
 ## Install
 
@@ -75,18 +75,21 @@ Just talk to Claude naturally. The plugin auto-triggers when you mention food, o
 | `/order-food` | "Order me food", "I'm hungry", "get me a burger" | Full workflow: search → menu → toppings → cart → checkout → track |
 | `/rappi-search` | "What restaurants are nearby?", "find pizza" | Searches stores and products, shows results |
 | `/rappi-reorder` | "Order the same as last time", "reorder" | Pulls from order history, re-adds items to cart |
+| `/rappi-suggest` | "What should I eat?", "suggest something" | Analyzes your taste profile, suggests based on habits, time, and history |
 
 ### Through Claude (Conversational)
 
-Beyond the skills, Claude can use the 22 MCP tools in any combination:
+Beyond the skills, Claude can use the 25 MCP tools in any combination:
 
+- "What should I eat?" — analyzes your taste profile, gives personalized suggestions
+- "What do I usually order?" — shows your computed taste profile with categories, spending, time patterns
 - "What did I order last week?" — checks order history
+- "Which items on this menu would I like?" — scores menu items against your taste
 - "Save El Corral as a favorite" — adds to favorites
 - "I'm allergic to peanuts" — saves to preferences, filters future recommendations
 - "Always tip $5,000" — saves default tip
 - "What's in my cart?" — shows cart contents
 - "Track my order" — shows delivery status and ETA
-- "Switch delivery to my office address" — changes active address
 
 ### Through the Terminal (CLI)
 
@@ -137,28 +140,62 @@ uv run rappi prefs                 # Your preferences
 
 </details>
 
-## Memory & Personalization
+## Intelligence & Personalization
 
-The plugin stores everything locally in a SQLite database at `~/.rappi/rappi.db`. Nothing is sent to external services. Over time, it builds a profile of your food preferences:
+The plugin stores everything locally in a SQLite database (`~/.rappi/rappi.db`) and computes a **taste profile** from your order history. Nothing is sent to external services (unless you enable optional OpenAI embeddings).
 
-| What's Remembered | How | What It Enables |
-|-------------------|-----|-----------------|
-| **Order history** | Auto-recorded after each checkout | "What did I order last time?", quick reorder |
-| **Product cache** | Auto-cached from searches and menus | Faster lookups, offline product search |
-| **Store cache** | Auto-cached from interactions | Favorite store names, quick access |
-| **Search history** | Auto-recorded on every search | Suggestions, popular queries |
-| **Preferences** | You tell Claude or set via CLI | Default tip, dietary restrictions, allergies |
-| **Favorites** | You mark stores as favorites | Quick access in any ordering flow |
+### What It Learns
+
+| Data | Source | What It Computes |
+|------|--------|-----------------|
+| **Order history** | Auto-recorded after checkout | "The usual" per store, reorder patterns |
+| **Product cache** | Auto-cached from menus/searches | Category preferences (Hamburguesas 40%, Bebidas 25%) |
+| **Time patterns** | Extracted from order timestamps | Peak ordering times (lunch, evening), day-of-week habits |
+| **Topping choices** | Stored with each order item | "Always adds extra cheese", "never onions" |
+| **Price patterns** | Computed from order totals | Average spend, budget alerts, price sensitivity |
+| **Search history** | Auto-recorded on every search | Query suggestions, intent signals |
+| **Preferences** | You tell Claude or set via CLI | Dietary restrictions, allergies, default tip |
+| **Favorites** | You mark stores | Quick access, prioritized recommendations |
+
+### Taste Profile
+
+The plugin computes a full taste profile on demand from your history:
+
+```
+Category preferences: Hamburguesas 40%, Bebidas 25%, Acompañamientos 20%...
+Store type: 70% restaurants, 30% Turbo
+Price range: avg $35,500 per order, avg $12,000 per item
+Time patterns: peak at lunch, mostly on weekdays
+Top stores: El Corral (12 orders), Turbo (8 orders)
+Spending: $450,000 total, 4.2 orders/week, avg tip $3,000
+```
+
+### How Embeddings Enhance This
+
+Without embeddings, recommendations use SQL — exact history matches and frequency counts. With embeddings enabled, the system understands *meaning*:
+
+| Feature | Without Embeddings (SQL) | With Embeddings |
+|---------|-------------------------|----------------|
+| "The usual" | Exact product match (ordered 3+ times) | Same |
+| Time suggestions | Stores ordered from at this hour | Same |
+| **Product similarity** | Not available | "You liked Hamburguesa BBQ → try Burger Texana" |
+| **Menu scoring** | Ordered-before frequency | Each item scored by cosine similarity to taste vector |
+| **Smart search** | Keyword LIKE match | "Something refreshing" → finds Sprite, Limonada |
+| **New discoveries** | Random unvisited stores | Stores with menus most similar to your taste |
+
+The taste vector is the average of all your ordered products' embeddings — a numerical fingerprint of your food preferences. When browsing a new restaurant, every menu item is scored against this vector.
 
 ### What Makes This Different
 
-No food delivery app does this today. Rappi's own app doesn't:
-- Build a taste profile from your history
-- Let you say "the usual" and have it understood
-- Remember your topping preferences per product
-- Give time-aware suggestions ("you usually order coffee around now")
-- Respect dietary restrictions across every recommendation
-- Track your spending patterns
+No food delivery app does this today:
+- Computes a taste profile from your entire order history
+- Detects "the usual" per store and offers to reorder
+- Understands topping preferences per product
+- Gives time-aware suggestions ("you usually order from here around noon")
+- Scores menu items by how well they match your taste (with embeddings)
+- Finds similar products across different restaurants
+- Respects dietary restrictions and allergies across every recommendation
+- Tracks spending patterns and alerts on unusual orders
 
 The combination of **AI reasoning** (Claude) + **personal memory** (SQLite) + **real ordering** (Rappi API) creates something that doesn't exist: a food assistant that actually knows you.
 
@@ -231,7 +268,7 @@ Skills tell Claude the workflow. MCP tools give Claude the capabilities. Service
 ## MCP Tools Reference
 
 <details>
-<summary>All 22 tools</summary>
+<summary>All 25 tools</summary>
 
 **Context**
 - `get_ordering_context` — full state snapshot: user, address, cart, orders, memory
@@ -263,6 +300,11 @@ Skills tell Claude the workflow. MCP tools give Claude the capabilities. Service
 - `quick_reorder(order_id)` — re-add past order to cart
 - `get_preferences` / `set_preference(key, value)`
 - `smart_search(query)` — semantic search across memory
+
+**Intelligence**
+- `get_taste_profile` — computed taste profile (categories, time patterns, spending, top items)
+- `get_recommendations(context?)` — smart suggestions based on habits and time of day
+- `score_menu(store_id)` — rank menu items by how well they match user's taste
 
 </details>
 

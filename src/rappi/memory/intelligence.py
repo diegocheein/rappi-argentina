@@ -87,6 +87,9 @@ class IntelligenceEngine:
         # Time-based recommendations
         recs.extend(await self._time_based_recommendations(now.hour))
 
+        # Embedding-powered: "similar to what you like" (if enabled)
+        recs.extend(await self._similar_product_recommendations())
+
         # New store discovery
         recs.extend(await self._new_store_recommendations())
 
@@ -498,3 +501,124 @@ class IntelligenceEngine:
             )
             for row in rows[:3]
         ]
+
+    async def _similar_product_recommendations(self) -> list[Recommendation]:
+        """Find products similar to what the user likes, using embeddings.
+
+        Computes the user's taste vector (average of ordered product embeddings),
+        then finds cached products most similar to it that the user hasn't ordered.
+        Only works when embeddings are enabled.
+        """
+        try:
+            taste_vec = await self._taste_vector()
+            if not taste_vec:
+                return []
+
+            from rappi.memory.embeddings import bytes_to_vector, cosine_similarity
+
+            # Get all product embeddings
+            cursor = await self._db.execute(
+                "SELECT entity_id, text_content, vector FROM embeddings WHERE entity_type = 'product'"
+            )
+            rows = await cursor.fetchall()
+            if not rows:
+                return []
+
+            # Get products the user has already ordered
+            cursor2 = await self._db.execute(
+                """SELECT DISTINCT CAST(o.store_id AS TEXT) || ':' || oi.product_id as eid
+                   FROM order_items oi JOIN orders o ON oi.order_id = o.id"""
+            )
+            ordered_ids = {row[0] for row in await cursor2.fetchall()}
+
+            # Score unordered products against taste vector
+            scored = []
+            for row in rows:
+                if row["entity_id"] in ordered_ids:
+                    continue
+                vec = bytes_to_vector(row["vector"])
+                score = cosine_similarity(taste_vec, vec)
+                if score > 0.7:  # only recommend strong matches
+                    scored.append((row["entity_id"], row["text_content"], score))
+
+            scored.sort(key=lambda x: x[2], reverse=True)
+
+            recs = []
+            for entity_id, text, score in scored[:3]:
+                parts = entity_id.split(":", 1)
+                store_id = int(parts[0]) if len(parts) == 2 else None
+                # Look up store name
+                store_name = None
+                if store_id:
+                    sc = await self._db.execute(
+                        "SELECT name FROM store_cache WHERE store_id = ?", (store_id,)
+                    )
+                    sr = await sc.fetchone()
+                    if sr:
+                        store_name = sr["name"]
+
+                recs.append(Recommendation(
+                    type="similar_product",
+                    title=f"You might like: {text}",
+                    description=f"Similar to what you usually order" + (f" — from {store_name}" if store_name else ""),
+                    store_id=store_id,
+                    store_name=store_name,
+                    product_name=text,
+                    confidence=round(score, 2),
+                ))
+
+            return recs
+        except Exception:
+            return []
+
+    async def score_menu_items(
+        self, store_id: int, products: list
+    ) -> list[dict]:
+        """Score menu items against the user's taste vector.
+
+        Returns products sorted by how well they match the user's taste,
+        with a match_score field. Only works with embeddings enabled.
+        Falls back to order-frequency scoring without embeddings.
+        """
+        # Try embedding-based scoring first
+        taste_vec = await self._taste_vector()
+        if taste_vec:
+            try:
+                from rappi.memory.embeddings import bytes_to_vector, cosine_similarity
+
+                scored = []
+                for p in products:
+                    pid = getattr(p, "id", getattr(p, "product_id", 0))
+                    entity_id = f"{store_id}:{pid}"
+                    cursor = await self._db.execute(
+                        "SELECT vector FROM embeddings WHERE entity_type = 'product' AND entity_id = ?",
+                        (entity_id,),
+                    )
+                    row = await cursor.fetchone()
+                    if row:
+                        vec = bytes_to_vector(row["vector"])
+                        score = cosine_similarity(taste_vec, vec)
+                    else:
+                        score = 0.0
+                    scored.append({"product": p, "match_score": round(score, 3), "source": "embedding"})
+
+                scored.sort(key=lambda x: x["match_score"], reverse=True)
+                return scored
+            except Exception:
+                pass
+
+        # Fallback: score by how often the user has ordered each product
+        scored = []
+        for p in products:
+            pid = str(getattr(p, "id", getattr(p, "product_id", 0)))
+            cursor = await self._db.execute(
+                "SELECT SUM(quantity) as qty FROM order_items WHERE product_id = ?",
+                (pid,),
+            )
+            row = await cursor.fetchone()
+            qty = row["qty"] if row and row["qty"] else 0
+            score = min(qty / 5, 1.0)  # 5 orders = max score
+            scored.append({"product": p, "match_score": round(score, 3), "source": "history"})
+
+        scored.sort(key=lambda x: x["match_score"], reverse=True)
+        return scored

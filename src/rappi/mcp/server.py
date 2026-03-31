@@ -736,5 +736,40 @@ async def get_recommendations(context: str | None = None) -> dict:
         return result.model_dump()
 
 
+@mcp.tool()
+async def score_menu(store_id: int) -> dict:
+    """Score a restaurant's menu items by how well they match the user's taste.
+
+    Uses embeddings (if enabled) to compute similarity between each product and
+    the user's taste vector. Falls back to order-frequency scoring without embeddings.
+    Items the user has ordered before or that match their taste rank highest.
+
+    When to use: After fetching a menu with get_restaurant_menu, call this to help
+    the user pick. "Based on your taste, I'd recommend these items."
+    """
+    async with _client_with_memory() as (client, memory):
+        store = await _get_store_detail(client, store_id)
+        all_products = [p for c in store.corridors for p in c.products if p.in_stock]
+
+        if not all_products:
+            return {"store_id": store_id, "scored_items": [], "note": "No available products"}
+
+        scored = await memory.intelligence.score_menu_items(store_id, all_products)
+        return {
+            "store_id": store_id,
+            "store_name": store.name,
+            "scored_items": [
+                {
+                    "product_id": getattr(s["product"], "id", 0),
+                    "name": getattr(s["product"], "name", ""),
+                    "price": getattr(s["product"], "price", 0),
+                    "match_score": s["match_score"],
+                    "scoring_method": s["source"],
+                }
+                for s in scored[:15]
+            ],
+        }
+
+
 def main():
     mcp.run(transport="stdio")

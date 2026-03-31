@@ -27,15 +27,16 @@ rappi-claude-plugin/
 ├── skills/                      # Claude skills (slash commands)
 │   ├── order-food/SKILL.md      # /order-food — full ordering workflow
 │   ├── rappi-search/SKILL.md    # /rappi-search — quick product lookup
-│   └── rappi-reorder/SKILL.md   # /rappi-reorder — reorder from history
+│   ├── rappi-reorder/SKILL.md   # /rappi-reorder — reorder from history
+│   └── rappi-suggest/SKILL.md   # /rappi-suggest — smart suggestions from taste profile
 │
 ├── agents/
 │   └── rappi-agent.md           # Specialized ordering agent (Sonnet)
 │
 └── src/rappi/                   # Plugin engine
-    ├── mcp/server.py            # 22 MCP tools
+    ├── mcp/server.py            # 25 MCP tools
     ├── services/                # Shared business logic
-    ├── memory/                  # SQLite + optional embeddings
+    ├── memory/                  # SQLite + optional embeddings + intelligence engine
     ├── cli/                     # Terminal interface
     ├── models/                  # Pydantic data models
     └── client.py                # Rappi API client
@@ -47,7 +48,7 @@ rappi-claude-plugin/
 Skills & Agent          (what Claude follows — workflow instructions)
       |
       v
-MCP Tools (22)          (what Claude calls — structured JSON in/out)
+MCP Tools (25)          (what Claude calls — structured JSON in/out)
       |
       +------ Services Layer ------+---- CLI (terminal alternative)
                   |
@@ -67,8 +68,11 @@ MCP Tools (22)          (what Claude calls — structured JSON in/out)
 | `.mcp.json` | Auto-registers `rappi-mcp` server in Claude Code |
 | `skills/order-food/SKILL.md` | Main skill — triggers on food/ordering requests |
 | `agents/rappi-agent.md` | Specialized agent with full Rappi API knowledge |
-| `src/rappi/mcp/server.py` | 22 MCP tools (the plugin's capabilities) |
+| `skills/rappi-suggest/SKILL.md` | Smart suggestions skill — taste-aware recommendations |
+| `src/rappi/mcp/server.py` | 25 MCP tools (the plugin's capabilities) |
 | `src/rappi/memory/manager.py` | MemoryManager facade (the plugin's brain) |
+| `src/rappi/memory/intelligence.py` | IntelligenceEngine — taste profile + recommendations |
+| `src/rappi/models/intelligence.py` | TasteProfile, Recommendation models |
 | `src/rappi/constants.py` | ALL API endpoints and headers — single source of truth |
 | `src/rappi/services/cart.py` | Most complex service — compound IDs, toppings, prices |
 | `src/rappi/services/store.py` | Store detail + menu. Non-restaurant stores use search |
@@ -138,6 +142,35 @@ SQLite at `~/.rappi/rappi.db`. All writes best-effort — never blocks ordering.
 **Repositories** (`memory/repositories/`): One per domain, parameterized SQL, no ORM.
 
 **Embeddings**: Optional. Enable via `preferences.set("embeddings.enabled", True)`. `OpenAIEmbeddingProvider` (text-embedding-3-small). Vectors as BLOB. Cosine similarity in pure Python.
+
+## Intelligence Engine
+
+`memory/intelligence.py` — `IntelligenceEngine` computes derived insights from raw data.
+
+**Taste Profile** (`compute_taste_profile()`): Aggregates all order history into:
+- Category preferences (% breakdown from product_cache categories)
+- Store type preferences (restaurant vs turbo vs market %)
+- Price range (avg order total, avg item price, min/max)
+- Time patterns (hour-of-day slots, day-of-week distribution, peaks)
+- Topping preferences (parsed from toppings_json, counted)
+- Top products/stores (by frequency)
+- Spending summary (total, avg, tip, orders/week)
+- Taste vector (average embedding of all ordered products — only with embeddings enabled)
+
+**Recommendations** (`get_recommendations()`): Scored suggestions:
+- `usual` — products ordered 3+ times from same store (confidence = times/10)
+- `time_based` — stores ordered from at current hour (confidence = count/total*5)
+- `similar_product` — products similar to taste vector, not yet ordered (**embeddings only**)
+- `new_store` — unvisited stores matching preferred type (confidence = 0.3)
+
+**Menu Scoring** (`score_menu_items(store_id, products)`):
+- With embeddings: cosine similarity of each item vs taste vector
+- Without: order-frequency scoring (how many times user ordered each product)
+
+**SQL vs Embeddings — when each is used:**
+- SQL handles: aggregations, counting, time patterns, "the usual", spending, favorites
+- Embeddings handle: similarity ("like what I usually get"), menu scoring, semantic search, cross-store product matching
+- Everything works without embeddings. Embeddings add similarity-based intelligence on top.
 
 ## Adding New Features
 
