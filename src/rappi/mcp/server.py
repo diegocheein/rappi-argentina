@@ -630,8 +630,13 @@ async def add_to_cart(
     product_id: int,
     quantity: int = 1,
     topping_ids: list[int] | None = None,
+    product_name: str = "",
+    product_price: float = 0,
 ) -> dict:
     """Add a product to the cart. Price and details are automatically fetched.
+
+    For non-restaurant stores (Turbo, markets), provide product_name and product_price
+    from the search results, since these stores don't have static menus to look up.
 
     IMPORTANT: If a product has required toppings (min_required > 0 in get_product_toppings),
     you MUST provide topping_ids for those categories. Otherwise this returns an error
@@ -645,28 +650,57 @@ async def add_to_cart(
         product = _find_product(store, product_id)
 
         # For non-restaurant stores (Turbo, markets), products aren't in corridors —
-        # search for the product to get its details
+        # check memory cache first, then search the store's products via API
         if not product and not store.is_restaurant:
-            search_stores = await _search(client, str(product_id), store_id=store_id)
-            if not search_stores:
-                # Try a broader search within the store
-                search_stores = await _search(client, "", store_id=store_id)
-            for ss in search_stores:
-                for sp in ss.products:
-                    if sp.product_id == product_id:
+            # Try memory cache (products seen in previous searches)
+            if client.memory:
+                try:
+                    cached = await client.memory.products.get(f"{store_id}_{product_id}")
+                    if cached:
                         product = Product(
-                            id=sp.product_id,
-                            name=sp.name,
-                            price=sp.price,
-                            real_price=sp.real_price or sp.price,
-                            image=sp.image,
-                            in_stock=sp.in_stock,
-                            has_toppings=sp.has_toppings,
-                            description=sp.presentation,
+                            id=product_id,
+                            name=cached["name"],
+                            price=cached["price"],
+                            real_price=cached.get("real_price") or cached["price"],
+                            in_stock=True,
+                            has_toppings=False,
                         )
-                        break
-                if product:
-                    break
+                except Exception:
+                    pass
+
+            # Fall back to building Product from provided name/price
+            if not product and product_name and product_price > 0:
+                product = Product(
+                    id=product_id,
+                    name=product_name,
+                    price=product_price,
+                    real_price=product_price,
+                    in_stock=True,
+                    has_toppings=False,
+                )
+
+            # Last resort: search the store for this product
+            if not product:
+                try:
+                    search_stores = await _search(client, product_name or "product", store_id=store_id)
+                    for ss in search_stores:
+                        for sp in ss.products:
+                            if sp.product_id == product_id:
+                                product = Product(
+                                    id=sp.product_id,
+                                    name=sp.name,
+                                    price=sp.price,
+                                    real_price=sp.real_price or sp.price,
+                                    image=sp.image,
+                                    in_stock=sp.in_stock,
+                                    has_toppings=sp.has_toppings,
+                                    description=sp.presentation,
+                                )
+                                break
+                        if product:
+                            break
+                except Exception:
+                    pass
 
         if not product:
             return {"error": f"Product {product_id} not found in store {store_id}. For non-restaurant stores, use the product_id from search_restaurants or browse_stores results."}
