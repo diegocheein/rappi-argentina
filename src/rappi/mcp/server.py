@@ -927,7 +927,7 @@ def main():
         mcp.settings.host = host
         mcp.settings.port = port
         # Disable DNS rebinding protection for remote deployment
-        mcp._mcp_server.transport_security = TransportSecuritySettings(
+        mcp.settings.transport_security = TransportSecuritySettings(
             enable_dns_rebinding_protection=False,
         )
         print(f"[rappi-mcp] Starting SSE on {host}:{port}", file=sys.stderr, flush=True)
