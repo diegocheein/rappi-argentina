@@ -916,10 +916,13 @@ async def score_menu(store_id: int) -> dict:
 
 def main():
     import os
+    import sys
 
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     if transport != "stdio":
-        # For remote deployment: bind to 0.0.0.0 and Railway's PORT
-        mcp.settings.host = os.environ.get("FASTMCP_HOST", "0.0.0.0")
-        mcp.settings.port = int(os.environ.get("PORT", os.environ.get("FASTMCP_PORT", "8000")))
+        host = os.environ.get("FASTMCP_HOST", "0.0.0.0")
+        port = int(os.environ.get("PORT", os.environ.get("FASTMCP_PORT", "8000")))
+        mcp.settings.host = host
+        mcp.settings.port = port
+        print(f"[rappi-mcp] Starting SSE on {host}:{port}", file=sys.stderr, flush=True)
     mcp.run(transport=transport)
