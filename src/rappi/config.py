@@ -1,6 +1,7 @@
 """Configuration management — persists token, deviceId, and coordinates to ~/.rappi/config.json."""
 
 import json
+import os
 import uuid
 from pathlib import Path
 
@@ -36,8 +37,23 @@ class ConfigManager:
     def load(self) -> RappiConfig:
         if self._path.exists():
             data = json.loads(self._path.read_text())
-            return RappiConfig(**data)
-        return RappiConfig()
+            config = RappiConfig(**data)
+        else:
+            config = RappiConfig()
+        # Environment variables override file config (for remote deployment)
+        env_token = os.environ.get("RAPPI_TOKEN")
+        if env_token:
+            config.token = env_token
+        env_device_id = os.environ.get("RAPPI_DEVICE_ID")
+        if env_device_id:
+            config.device_id = env_device_id
+        env_lat = os.environ.get("RAPPI_LAT")
+        env_lng = os.environ.get("RAPPI_LNG")
+        if env_lat:
+            config.lat = float(env_lat)
+        if env_lng:
+            config.lng = float(env_lng)
+        return config
 
     def save(self, config: RappiConfig) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)

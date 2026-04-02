@@ -1,0 +1,10 @@
+.venv
+.git
+.claude
+.claude-plugin
+tests
+agents
+skills
+*.md
+__pycache__
+.pytest_cache

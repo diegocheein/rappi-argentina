@@ -915,4 +915,7 @@ async def score_menu(store_id: int) -> dict:
 
 
 def main():
-    mcp.run(transport="stdio")
+    import os
+
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    mcp.run(transport=transport)
