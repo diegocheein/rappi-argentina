@@ -17,6 +17,6 @@ COPY src/ src/
 # Install the project itself
 RUN uv sync --frozen --no-dev
 
-ENV MCP_TRANSPORT=streamable-http
+ENV MCP_TRANSPORT=sse
 
 CMD ["uv", "run", "rappi-mcp"]
