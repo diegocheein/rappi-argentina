@@ -930,5 +930,5 @@ def main():
         mcp.settings.transport_security = TransportSecuritySettings(
             enable_dns_rebinding_protection=False,
         )
-        print(f"[rappi-mcp] Starting SSE on {host}:{port}", file=sys.stderr, flush=True)
+        print(f"[rappi-mcp] Starting {transport} on {host}:{port}", file=sys.stderr, flush=True)
     mcp.run(transport=transport)
