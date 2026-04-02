@@ -5,6 +5,7 @@
 tests
 agents
 skills
-*.md
+CLAUDE.md
+TESTING.md
 __pycache__
 .pytest_cache
