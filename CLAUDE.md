@@ -207,6 +207,136 @@ asyncio.run(t())
 npx @modelcontextprotocol/inspector uv run rappi-mcp
 ```
 
+## Remote Deployment (Railway + Cowork)
+
+The MCP server supports remote deployment for use with Claude Cowork (web), Claude Desktop, and any MCP client that speaks HTTP.
+
+### Architecture
+
+```
+Claude Code (local)     → stdio transport  → rappi-mcp (local process)
+Claude Desktop (local)  → stdio transport  → rappi-mcp (local process)
+Cowork / Web clients    → SSE over HTTP    → Railway (rappi-mcp container)
+```
+
+### How the Remote Server Works
+
+`src/rappi/mcp/server.py` detects `MCP_TRANSPORT` env var at import time:
+- **`stdio`** (default): Runs as a local subprocess — used by Claude Code and Claude Desktop.
+- **`sse`**: Runs uvicorn on `0.0.0.0:$PORT` with SSE transport — used for Railway/cloud deployment.
+
+**Critical pattern** (learned the hard way):
+
+1. **`transport_security` must be set in the `FastMCP()` constructor**, not on `mcp.settings` later. FastMCP's DNS rebinding protection is configured at construction time. If you set it after, the SSE transport creates its own security validator from the original settings and ignores your changes.
+
+2. **Run uvicorn directly** with a custom Starlette app (don't use `mcp.run()`). This gives control over host/port binding and lets you add a `/health` endpoint for Railway healthchecks.
+
+3. **Use SSE transport for Cowork**, not streamable-http. Cowork connects to the `/sse` endpoint. The `.mcp.json` in the Cowork plugin uses `"type": "http"` with the `/sse` URL — this is correct and matches how other working MCP servers (e.g., ESPN Fantasy) are configured.
+
+4. **Auth is handled via env vars**, not OAuth. The Rappi token is set as `RAPPI_TOKEN` in Railway. Cowork connects to the MCP server without OAuth — no auth handshake needed. The server authenticates to Rappi's API using the pre-configured token.
+
+### Server Setup Pattern
+
+```python
+# At module level — BEFORE FastMCP() is created
+transport = os.environ.get("MCP_TRANSPORT", "stdio")
+mcp_kwargs = dict(name="rappi", instructions="...")
+
+if transport in ("sse", "streamable-http", "http"):
+    from mcp.server.transport_security import TransportSecuritySettings
+    mcp_kwargs["transport_security"] = TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,  # Required for cloud deploy
+    )
+
+mcp = FastMCP(**mcp_kwargs)
+
+# In main() — run uvicorn directly for HTTP transports
+def main():
+    if transport in ("sse", "streamable-http", "http"):
+        from starlette.applications import Starlette
+        from starlette.responses import PlainTextResponse
+        from starlette.routing import Route, Mount
+        import uvicorn
+
+        host = os.environ.get("MCP_HOST", "0.0.0.0")
+        port = int(os.environ.get("PORT", os.environ.get("MCP_PORT", "8000")))
+
+        def health(_request):
+            return PlainTextResponse("ok")
+
+        mcp_app = mcp.sse_app()
+        app = Starlette(routes=[
+            Route("/health", health),
+            Mount("/", app=mcp_app),
+        ])
+        uvicorn.run(app, host=host, port=port)
+    else:
+        mcp.run(transport=transport)
+```
+
+### Railway Configuration
+
+**Environment variables** (set in Railway dashboard):
+| Variable | Value | Purpose |
+|----------|-------|---------|
+| `MCP_TRANSPORT` | `sse` | Enables HTTP transport |
+| `RAPPI_TOKEN` | `ft.xxxxx` | Rappi auth token (from `~/.rappi/config.json`) |
+| `RAPPI_DEVICE_ID` | UUID | Device ID (from `~/.rappi/config.json`) |
+| `RAPPI_LAT` | `4.624335` | Delivery latitude (from `rappi address set`) |
+| `RAPPI_LNG` | `-74.063644` | Delivery longitude (from `rappi address set`) |
+| `PORT` | (auto-set by Railway) | Railway injects this |
+
+**Files**: `Dockerfile` (Python 3.12 + uv), `railway.json` (healthcheck at `/health`).
+
+**Token refresh**: Rappi tokens expire. Re-authenticate locally (`rappi auth login`), then update `RAPPI_TOKEN` in Railway.
+
+### Cowork Plugin
+
+The Cowork plugin is a zip uploaded to Claude Cowork (Customize > Plugins):
+
+```
+rappi-cowork-plugin.zip
+├── .claude-plugin/plugin.json     # Plugin manifest
+├── .mcp.json                      # Points to Railway SSE endpoint
+├── skills/                        # Auto-activated workflow instructions
+│   ├── order-food/SKILL.md
+│   ├── rappi-search/SKILL.md
+│   ├── rappi-reorder/SKILL.md
+│   └── rappi-suggest/SKILL.md
+└── agents/
+    └── rappi-agent.md
+```
+
+**`.mcp.json` for Cowork** (different from local):
+```json
+{
+  "mcpServers": {
+    "rappi": {
+      "type": "http",
+      "url": "https://rappi-claude-plugin-production.up.railway.app/sse"
+    }
+  }
+}
+```
+
+**Connector setup in Cowork**: Add as remote MCP connector — URL only, no OAuth.
+
+### Local `.mcp.json` (Claude Code / Desktop)
+
+The repo's `.mcp.json` uses stdio for local development:
+```json
+{
+  "mcpServers": {
+    "rappi": {
+      "command": "uv",
+      "args": ["run", "--project", ".", "rappi-mcp"]
+    }
+  }
+}
+```
+
+These two configs coexist — local `.mcp.json` for Claude Code, Cowork zip with HTTP `.mcp.json` for web.
+
 ## Dependencies
 
 Core: `httpx`, `typer`, `rich`, `pydantic`, `mcp`, `playwright`, `aiosqlite`
