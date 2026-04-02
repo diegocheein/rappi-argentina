@@ -452,6 +452,69 @@ async def browse_restaurants(offset: int = 0, limit: int = 20) -> dict:
 
 
 @mcp.tool()
+async def browse_stores(store_type: str, query: str = "") -> dict:
+    """Browse non-restaurant stores by type — Turbo, markets, pharmacies, liquor stores, etc.
+
+    Uses unified search to discover stores. Pass the store type as query if no specific
+    product query is given.
+
+    store_type: The type to filter for — "turbo", "oxxo", "olimpica", "carulla",
+    "exito", "larebaja", "farmatodo", "cervesia" (liquor), etc.
+    query: Optional product to search for within those stores (e.g., "cerveza michelob").
+    If empty, searches by store_type name to discover available stores.
+
+    When to use: The user wants to find Turbo stores, markets, pharmacies, or any
+    non-restaurant store. After finding a store, use search_in_store to browse products.
+    """
+    search_query = query or store_type
+    async with RappiClient() as client:
+        from rappi.services.search import search as _search_svc
+        import unicodedata
+        results = await _search_svc(client, search_query)
+
+        def _normalize(s: str) -> str:
+            return "".join(c for c in unicodedata.normalize("NFD", s.lower()) if unicodedata.category(c) != "Mn")
+
+        # Filter stores matching the requested type (accent-insensitive)
+        filter_norm = _normalize(store_type)
+        matched = []
+        other = []
+        for store in results:
+            st = _normalize(store.store_type or "")
+            sn = _normalize(store.store_name or "")
+            if filter_norm in st or filter_norm in sn:
+                matched.append(store)
+            else:
+                other.append(store)
+
+        # Show matched stores first, then others that had product hits
+        stores_to_show = matched or other
+        return {
+            "store_type_filter": store_type,
+            "query": search_query,
+            "matched_stores": len(matched),
+            "total_stores": len(results),
+            "stores": [
+                {
+                    "store_id": s.store_id,
+                    "store_name": s.store_name,
+                    "store_type": s.store_type,
+                    "products": [
+                        {
+                            "product_id": p.product_id,
+                            "name": p.name,
+                            "price": p.price,
+                            "in_stock": p.in_stock,
+                        }
+                        for p in (s.products or [])[:5]
+                    ],
+                }
+                for s in stores_to_show[:15]
+            ],
+        }
+
+
+@mcp.tool()
 async def get_restaurant_menu(store_id: int) -> dict:
     """Get the full menu for a store, organized by category.
 
