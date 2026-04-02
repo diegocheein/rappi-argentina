@@ -920,9 +920,15 @@ def main():
 
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     if transport != "stdio":
+        from mcp.server.transport_security import TransportSecuritySettings
+
         host = os.environ.get("FASTMCP_HOST", "0.0.0.0")
         port = int(os.environ.get("PORT", os.environ.get("FASTMCP_PORT", "8000")))
         mcp.settings.host = host
         mcp.settings.port = port
+        # Disable DNS rebinding protection for remote deployment
+        mcp._mcp_server.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False,
+        )
         print(f"[rappi-mcp] Starting SSE on {host}:{port}", file=sys.stderr, flush=True)
     mcp.run(transport=transport)
