@@ -918,4 +918,11 @@ def main():
     import os
 
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    # For remote deployment: forward Railway's PORT to FastMCP
+    port = os.environ.get("PORT")
+    if port and not os.environ.get("FASTMCP_PORT"):
+        os.environ["FASTMCP_PORT"] = port
+    host = os.environ.get("FASTMCP_HOST")
+    if not host and transport != "stdio":
+        os.environ["FASTMCP_HOST"] = "0.0.0.0"
     mcp.run(transport=transport)
