@@ -1,5 +1,6 @@
 """Rappi MCP server — exposes Rappi services as tools for AI assistants."""
 
+import os
 from contextlib import asynccontextmanager
 
 from rappi.client import RappiClient
@@ -26,8 +27,10 @@ from rappi.utils.ids import make_compound_id
 
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP(
-    "rappi",
+# Disable DNS rebinding protection for remote transports (Railway, etc.)
+_transport = os.environ.get("MCP_TRANSPORT", "stdio")
+_mcp_kwargs: dict = dict(
+    name="rappi",
     instructions=(
         "Rappi food delivery tools for searching restaurants, browsing menus, "
         "managing a cart, and placing orders in Colombia (prices in COP).\n\n"
@@ -38,6 +41,17 @@ mcp = FastMCP(
         "The user must authenticate first via `rappi auth login` in their terminal."
     ),
 )
+
+if _transport in ("sse", "streamable-http", "http"):
+    try:
+        from mcp.server.auth.settings import TransportSecuritySettings
+    except ImportError:
+        from mcp.server.transport_security import TransportSecuritySettings  # type: ignore[no-redef]
+    _mcp_kwargs["transport_security"] = TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    )
+
+mcp = FastMCP(**_mcp_kwargs)
 
 
 # --- Resources (workflow playbooks for any MCP client) ---
@@ -915,20 +929,28 @@ async def score_menu(store_id: int) -> dict:
 
 
 def main():
-    import os
-    import sys
+    if _transport in ("sse", "streamable-http", "http"):
+        from starlette.applications import Starlette
+        from starlette.responses import PlainTextResponse
+        from starlette.routing import Route, Mount
+        import uvicorn
 
-    transport = os.environ.get("MCP_TRANSPORT", "stdio")
-    if transport != "stdio":
-        from mcp.server.transport_security import TransportSecuritySettings
+        host = os.environ.get("MCP_HOST", "0.0.0.0")
+        port = int(os.environ.get("PORT", os.environ.get("MCP_PORT", "8000")))
 
-        host = os.environ.get("FASTMCP_HOST", "0.0.0.0")
-        port = int(os.environ.get("PORT", os.environ.get("FASTMCP_PORT", "8000")))
-        mcp.settings.host = host
-        mcp.settings.port = port
-        # Disable DNS rebinding protection for remote deployment
-        mcp.settings.transport_security = TransportSecuritySettings(
-            enable_dns_rebinding_protection=False,
+        def health(_request):
+            return PlainTextResponse("ok")
+
+        mcp_app = mcp.sse_app() if _transport == "sse" else mcp.streamable_http_app()
+
+        app = Starlette(
+            routes=[
+                Route("/health", health),
+                Mount("/", app=mcp_app),
+            ],
         )
-        print(f"[rappi-mcp] Starting {transport} on {host}:{port}", file=sys.stderr, flush=True)
-    mcp.run(transport=transport)
+
+        print(f"[rappi-mcp] Starting {_transport} on {host}:{port}", flush=True)
+        uvicorn.run(app, host=host, port=port)
+    else:
+        mcp.run(transport=_transport)
