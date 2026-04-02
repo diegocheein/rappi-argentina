@@ -200,11 +200,37 @@ Key differences:
 # --- Helpers ---
 
 
+async def _sync_address_coords(client: RappiClient) -> None:
+    """Sync config coordinates from Rappi's active address.
+
+    Ensures searches use the correct location even when the address
+    was changed via the Rappi app/website, or when running on Railway
+    without manually setting RAPPI_LAT/LNG.
+    """
+    try:
+        addresses = await _list_addresses(client)
+        active = next((a for a in addresses if a.active), None)
+        if active and (active.lat != client.config.lat or active.lng != client.config.lng):
+            client._config.lat = active.lat
+            client._config.lng = active.lng
+    except Exception:
+        pass  # Best-effort — don't block ordering if address fetch fails
+
+
+@asynccontextmanager
+async def _client_synced():
+    """Create a RappiClient with coordinates synced from Rappi's active address."""
+    async with RappiClient() as client:
+        await _sync_address_coords(client)
+        yield client
+
+
 @asynccontextmanager
 async def _client_with_memory():
-    """Create a RappiClient with MemoryManager for MCP tool calls."""
+    """Create a RappiClient with MemoryManager and synced coordinates."""
     async with MemoryManager() as memory:
         async with RappiClient(memory=memory) as client:
+            await _sync_address_coords(client)
             yield client, memory
 
 
@@ -309,7 +335,7 @@ async def auth_status() -> dict:
     When to use: When the user asks about their account or you need to verify auth works.
     Next step: If authenticated, use get_ordering_context for full state.
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         profile = await _get_profile(client)
         prime = await _is_prime(client)
         return {
@@ -327,7 +353,7 @@ async def list_delivery_addresses() -> dict:
     When to use: When the user wants to check or switch their delivery location.
     Next step: Use set_delivery_address to switch, then search or browse restaurants.
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         addresses = await _list_addresses(client)
         return {
             "addresses": [
@@ -351,7 +377,7 @@ async def set_delivery_address(address_id: int) -> dict:
     When to use: When the user wants to switch delivery location.
     Next step: Search or browse restaurants for the new location.
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         await _set_active_address(client, address_id)
         return {"success": True, "address_id": address_id}
 
@@ -371,7 +397,7 @@ async def search_restaurants(query: str, max_stores: int = 10, max_products_per_
     For other stores (Turbo, markets), use search_in_store to find more products.
     Or use add_to_cart directly if the user wants a product from the results.
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         stores = await _search(client, query)
         return {
             "stores": [
@@ -408,7 +434,7 @@ async def search_in_store(store_id: int, query: str) -> dict:
     non-restaurant store. Also useful for searching within a restaurant.
     Next step: Use add_to_cart with the store_id and product_id from the results.
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         corridors = await _search_store_products(client, store_id, query)
         return {
             "categories": [
@@ -437,7 +463,7 @@ async def browse_restaurants(offset: int = 0, limit: int = 20) -> dict:
     When to use: The user wants to see what's available nearby without a specific query.
     Next step: Use get_restaurant_menu with a store_id to see the full menu.
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         stores = await _get_catalog(client, offset=offset, limit=limit)
         return {
             "stores": [
@@ -470,7 +496,7 @@ async def browse_stores(store_type: str, query: str = "") -> dict:
     non-restaurant store. After finding a store, use search_in_store to browse products.
     """
     search_query = query or store_type
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         from rappi.services.search import search as _search_svc
         import unicodedata
         results = await _search_svc(client, search_query)
@@ -531,7 +557,7 @@ async def get_restaurant_menu(store_id: int, max_products_per_category: int = 10
     Next step: If a product has has_toppings=true, call get_product_toppings before adding to cart.
     If categories is empty, use search_in_store to find products.
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         store = await _get_store_detail(client, store_id)
         result = {
             "store_id": store.store_id,
@@ -573,7 +599,7 @@ async def get_product_toppings(store_id: int, product_id: int) -> dict:
     with mandatory topping categories (min_required > 0).
     Next step: Pass the selected topping IDs to add_to_cart.
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         result = await _get_toppings(client, store_id, product_id)
         return {
             "categories": [
@@ -614,7 +640,7 @@ async def add_to_cart(
     When to use: After the user picks a product and (if needed) customizations.
     Next step: Ask if they want to add more items, or use checkout to review/place the order.
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         store = await _get_store_detail(client, store_id)
         product = _find_product(store, product_id)
 
@@ -666,7 +692,7 @@ async def view_cart() -> dict:
     When to use: When the user wants to see what's in their cart before checking out.
     Next step: Use checkout(confirm=false) to preview the order, or remove_from_cart to remove items.
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         carts = await _get_carts(client)
         if not carts:
             return {"empty": True, "stores": []}
@@ -702,7 +728,7 @@ async def remove_from_cart(store_id: int, product_id: int) -> dict:
     Next step: Use view_cart to show updated contents.
     """
     compound_id = make_compound_id(store_id, product_id)
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         await _remove_from_cart(client, compound_id)
         return {"success": True, "removed": compound_id}
 
@@ -717,7 +743,7 @@ async def checkout(tip_amount: int = 0, confirm: bool = False) -> dict:
     When to use: After the user is done adding items and wants to review or place the order.
     Next step: If preview, show the summary and ask user to confirm. If placed, use get_order_status to track.
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         await _recalculate_cart(client)
 
         if tip_amount > 0:
@@ -750,7 +776,7 @@ async def get_order_status() -> dict:
     When to use: After placing an order, or when the user asks about their order status.
     Order states: created -> in_store -> on_the_way -> delivered (or cancelled).
     """
-    async with RappiClient() as client:
+    async with _client_synced() as client:
         result = await _get_orders(client)
         return {
             "active_orders": [
