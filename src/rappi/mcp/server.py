@@ -357,11 +357,14 @@ async def set_delivery_address(address_id: int) -> dict:
 
 
 @mcp.tool()
-async def search_restaurants(query: str) -> dict:
+async def search_restaurants(query: str, max_stores: int = 10, max_products_per_store: int = 5) -> dict:
     """Search for restaurants, stores, and products matching a query.
 
     Returns ALL store types: restaurants, Turbo (convenience), markets, pharmacies, etc.
     The store_type field tells you what kind of store it is.
+
+    max_stores: Maximum number of stores to return (default 10).
+    max_products_per_store: Maximum products shown per store (default 5). Use get_restaurant_menu for full menus.
 
     When to use: The user asks for a specific food, product, or store by name.
     Next step: For restaurants (store_type="restaurant"), use get_restaurant_menu.
@@ -386,10 +389,10 @@ async def search_restaurants(query: str) -> dict:
                             "in_stock": p.in_stock,
                             "has_toppings": p.has_toppings,
                         }
-                        for p in s.products
+                        for p in s.products[:max_products_per_store]
                     ],
                 }
-                for s in stores
+                for s in stores[:max_stores]
             ]
         }
 
@@ -515,11 +518,14 @@ async def browse_stores(store_type: str, query: str = "") -> dict:
 
 
 @mcp.tool()
-async def get_restaurant_menu(store_id: int) -> dict:
-    """Get the full menu for a store, organized by category.
+async def get_restaurant_menu(store_id: int, max_products_per_category: int = 10) -> dict:
+    """Get the menu for a store, organized by category.
 
     Works for restaurants (returns menu corridors). For non-restaurant stores
     (Turbo, markets) this may return an empty menu — use search_in_store instead.
+
+    max_products_per_category: Limit products per category (default 10) to keep
+    response manageable. Large menus (McDonald's, etc.) can have 100+ items.
 
     When to use: After the user picks a restaurant from search/browse results.
     Next step: If a product has has_toppings=true, call get_product_toppings before adding to cart.
@@ -535,6 +541,7 @@ async def get_restaurant_menu(store_id: int) -> dict:
             "categories": [
                 {
                     "name": c.name,
+                    "product_count": len(c.products),
                     "products": [
                         {
                             "id": p.id,
@@ -544,7 +551,7 @@ async def get_restaurant_menu(store_id: int) -> dict:
                             "in_stock": p.in_stock,
                             "has_toppings": p.has_toppings,
                         }
-                        for p in c.products
+                        for p in c.products[:max_products_per_category]
                     ],
                 }
                 for c in store.corridors
