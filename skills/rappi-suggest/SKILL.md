@@ -2,7 +2,7 @@
 name: rappi-suggest
 description: Smart food suggestions based on your taste profile and ordering habits. Use when the user asks "what should I eat?", "suggest something", "I'm hungry but don't know what", or wants personalized recommendations.
 argument-hint: "[optional: 'lunch', 'something cheap', 'burger place']"
-allowed-tools: "mcp__rappi__get_taste_profile,mcp__rappi__get_recommendations,mcp__rappi__get_ordering_context,mcp__rappi__search_restaurants,mcp__rappi__get_restaurant_menu,mcp__rappi__add_to_cart,mcp__rappi__checkout,mcp__rappi__view_cart,mcp__rappi__quick_reorder"
+allowed-tools: "mcp__rappi__get_taste_profile,mcp__rappi__get_recommendations,mcp__rappi__get_ordering_context,mcp__rappi__search_restaurants,mcp__rappi__browse_stores,mcp__rappi__get_restaurant_menu,mcp__rappi__add_to_cart,mcp__rappi__checkout,mcp__rappi__view_cart,mcp__rappi__quick_reorder"
 ---
 
 # Rappi Smart Suggestions

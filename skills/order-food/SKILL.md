@@ -2,7 +2,7 @@
 name: order-food
 description: Order food delivery from Rappi. Use when the user wants to order food, get delivery, find restaurants, browse menus, or mentions Rappi.
 argument-hint: "[what to order or restaurant name]"
-allowed-tools: "mcp__rappi__*,Read,Bash(uv run rappi *)"
+allowed-tools: "mcp__rappi__*"
 ---
 
 # Rappi Food Ordering
@@ -35,9 +35,12 @@ Call `get_ordering_context` FIRST to understand the user's current state:
 - Call `get_order_history` to show past orders
 - Use `quick_reorder` with the order ID they choose
 
-**If user mentions a specific store (Turbo, market, pharmacy)**:
-- These are non-restaurant stores — use `search_in_store(store_id, query)` to find products
-- They don't have browsable menus, only search
+**If user mentions a specific store type (Turbo, Exito, Carulla, market, pharmacy)**:
+- Call `browse_stores(store_type, query)` to find stores of that type and optionally search for products
+- Example: `browse_stores("exito", "cerveza")` finds Exito stores with beer
+- Example: `browse_stores("turbo")` lists nearby Turbo stores
+- Once you have a store_id, use `search_in_store(store_id, query)` for more products
+- These stores don't have static menus — discovery is search-based
 
 ### Step 3: Show Menu / Products
 - Call `get_restaurant_menu(store_id)` for restaurants
