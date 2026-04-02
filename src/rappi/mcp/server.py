@@ -644,8 +644,32 @@ async def add_to_cart(
         store = await _get_store_detail(client, store_id)
         product = _find_product(store, product_id)
 
+        # For non-restaurant stores (Turbo, markets), products aren't in corridors —
+        # search for the product to get its details
+        if not product and not store.is_restaurant:
+            search_stores = await _search(client, str(product_id), store_id=store_id)
+            if not search_stores:
+                # Try a broader search within the store
+                search_stores = await _search(client, "", store_id=store_id)
+            for ss in search_stores:
+                for sp in ss.products:
+                    if sp.product_id == product_id:
+                        product = Product(
+                            id=sp.product_id,
+                            name=sp.name,
+                            price=sp.price,
+                            real_price=sp.real_price or sp.price,
+                            image=sp.image,
+                            in_stock=sp.in_stock,
+                            has_toppings=sp.has_toppings,
+                            description=sp.presentation,
+                        )
+                        break
+                if product:
+                    break
+
         if not product:
-            return {"error": f"Product {product_id} not found in store {store_id}"}
+            return {"error": f"Product {product_id} not found in store {store_id}. For non-restaurant stores, use the product_id from search_restaurants or browse_stores results."}
 
         if not product.in_stock:
             return {"error": f"'{product.name}' is currently out of stock"}
@@ -672,7 +696,9 @@ async def add_to_cart(
                         topping_map[t.id] = t
                 selected_toppings = [topping_map[tid] for tid in topping_ids if tid in topping_map]
 
-        carts = await _add_to_cart(client, store_id, product, selected_toppings, quantity)
+        # Use the correct store_type for the cart API endpoint
+        store_type = store.effective_store_type or "restaurant"
+        carts = await _add_to_cart(client, store_id, product, selected_toppings, quantity, store_type=store_type)
         total_items = sum(p.units for cart in carts for s in cart.stores for p in s.products)
         total_price = sum(cart.sub_total for cart in carts)
         return {
