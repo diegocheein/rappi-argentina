@@ -20,8 +20,6 @@ RUN uv sync --frozen --no-dev
 # FastMCP reads these for SSE/HTTP transport
 ENV MCP_TRANSPORT=sse
 ENV FASTMCP_HOST=0.0.0.0
-ENV FASTMCP_PORT=8000
 
-EXPOSE 8000
-
-CMD ["uv", "run", "rappi-mcp"]
+# Railway injects PORT; forward it to FastMCP's FASTMCP_PORT
+CMD ["sh", "-c", "FASTMCP_PORT=${PORT:-8000} uv run rappi-mcp"]
