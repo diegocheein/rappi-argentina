@@ -296,6 +296,25 @@ export OPENAI_API_KEY="sk-..."
 uv run rappi prefs set embeddings.enabled true
 ```
 
+## Security
+
+**This plugin can place real orders and spend real money.** The Rappi auth token grants full access to your account — searching, ordering, and paying. Understand what you're enabling:
+
+- **Orders require explicit confirmation** — Claude will always preview first and ask before placing
+- **Spending limit** — orders over $500,000 COP are blocked by default. Change with `rappi prefs set max_order_amount 1000000`
+- **Token storage** — your token is saved locally at `~/.rappi/config.json` (never committed to git)
+- **Railway deployment** — if you deploy to Railway, your token is stored in Railway's env vars. Use Railway's secrets management
+- **No password access** — the plugin only captures the Bearer token, not your Rappi password
+
+## Updating the `app-version` Header
+
+Rappi deploys new versions regularly. If API calls start returning 403 errors:
+
+1. Open your country's Rappi website in Chrome DevTools (Network tab)
+2. Look at any API request's `app-version` header
+3. Update `APP_VERSION` in `src/rappi/constants.py`
+4. Also update `WEB_VERSION` if store browsing breaks
+
 ## Development
 
 ```bash

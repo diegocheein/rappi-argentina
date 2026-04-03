@@ -867,6 +867,26 @@ async def checkout(tip_amount: int = 0, confirm: bool = False) -> dict:
         if not detail.return_key:
             return {"error": "No return_key — cannot place order. Cart may be empty or invalid."}
 
+        # Safety check: warn on large orders (configurable via max_order_amount preference)
+        try:
+            carts = await _get_carts(client)
+            order_total = sum(c.sub_total for c in carts)
+            max_amount = 500_000  # Default max: $500,000 COP
+            if client.memory:
+                try:
+                    custom_max = await client.memory.preferences.get("max_order_amount")
+                    if custom_max:
+                        max_amount = float(custom_max)
+                except Exception:
+                    pass
+            if order_total > max_amount:
+                return {
+                    "error": f"Order total (${order_total:,.0f}) exceeds safety limit (${max_amount:,.0f}). "
+                    "Set a higher limit with set_preference('max_order_amount', '1000000') or confirm in the Rappi app.",
+                }
+        except Exception:
+            pass
+
         result = await _place_order(client, detail.return_key, store_type=store_type)
         return {"placed": True, "store_type": store_type, "summary": summary, "result": result}
 
