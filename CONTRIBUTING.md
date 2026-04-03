@@ -15,7 +15,7 @@ uv run pytest tests/ -q    # 196 tests, all should pass
 
 ```
 src/rappi/
-├── mcp/server.py       # 38 MCP tools — the plugin's interface
+├── mcp/server.py       # 39 MCP tools — the plugin's interface
 ├── services/           # Business logic (one file per domain)
 ├── models/             # Pydantic data models
 ├── memory/             # SQLite persistence + intelligence engine

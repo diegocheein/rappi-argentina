@@ -2,7 +2,7 @@
 
 A Claude plugin that lets you order anything from [Rappi](https://www.rappi.com) through conversation — restaurants, Turbo convenience stores, supermarkets, pharmacies, and liquor stores. Say "order me a burger" or "find beer at Exito" and Claude handles the rest — searching stores, browsing products, managing your cart, and placing the order. It remembers your favorites, preferences, and order history across conversations.
 
-Works on **Claude Code**, **Claude Desktop**, and **Claude Cowork** (web).
+Works on **Claude Code**, **Claude Desktop**, **Claude Cowork** (web), and **[OpenClaw](https://openclaw.ai)**.
 
 Supports **Colombia** and **Mexico** (more countries coming soon).
 
@@ -29,7 +29,7 @@ Claude: *searches both store types, compares prices*
         *"Exito has it cheaper — want me to add it to cart?"*
 ```
 
-The plugin gives Claude **38 tools** to interact with Rappi across all store types — restaurants, Turbo, supermarkets, pharmacies, and more. It includes **4 skills** for common workflows, a specialized ordering agent, and a local memory system that learns your preferences over time.
+The plugin gives Claude **39 tools** to interact with Rappi across all store types — restaurants, Turbo, supermarkets, pharmacies, and more. It includes **4 skills** for common workflows, a specialized ordering agent, and a local memory system that learns your preferences over time.
 
 ## Install
 
@@ -37,7 +37,7 @@ The plugin gives Claude **38 tools** to interact with Rappi across all store typ
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)
-- A Rappi account (Colombia)
+- A Rappi account (Colombia or Mexico)
 
 ### Setup
 
@@ -84,9 +84,25 @@ claude   # MCP server auto-registers from .mcp.json
 
 **Claude Cowork** (web — requires remote MCP server):
 1. Deploy the MCP server (see [Deployment](#deployment))
-2. Generate plugin zip: `uv run rappi build-plugin --url https://your-server.up.railway.app/sse`
+2. Generate plugin zip: `uv run rappi build-plugin build --url https://your-server.up.railway.app/sse`
 3. Upload the zip via Cowork > Customize > Plugins
 4. Add the SSE URL as a remote MCP connector
+
+**OpenClaw** (local — auto-discovers as bundle):
+```bash
+cd rappi-claude-plugin
+openclaw plugins install .
+openclaw gateway restart
+```
+
+**OpenClaw** (remote — via deployed MCP server):
+```bash
+uv run rappi build-plugin build --target openclaw --url https://your-server.up.railway.app/sse
+openclaw plugins install ~/Desktop/rappi-openclaw-plugin.zip
+openclaw gateway restart
+```
+
+See [docs/openclaw-setup.md](docs/openclaw-setup.md) for the full OpenClaw guide.
 
 ## What You Can Do
 
@@ -103,7 +119,7 @@ Just talk to Claude naturally. The plugin auto-triggers when you mention food, o
 
 ### Through Claude (Conversational)
 
-Beyond the skills, Claude can use the 38 MCP tools in any combination:
+Beyond the skills, Claude can use the 39 MCP tools in any combination:
 
 - "What's available on Rappi?" — shows all verticals (Restaurants, Turbo, Markets, Farmacia, Licores)
 - "Find me beer at Exito" — searches specific store types with products and prices
@@ -162,7 +178,7 @@ uv run rappi prefs                 # Your preferences
 ## MCP Tools Reference
 
 <details>
-<summary>All 38 tools</summary>
+<summary>All 39 tools</summary>
 
 **Discovery & Browsing**
 - `explore_verticals` — all available store types in area (Restaurants, Turbo, Markets, Farmacia, Licores)
@@ -182,7 +198,8 @@ uv run rappi prefs                 # Your preferences
 **Cart & Checkout**
 - `add_to_cart(store_id, product_id, quantity, topping_ids, product_name, product_price)` — add item
 - `view_cart` / `remove_from_cart(store_id, product_id)`
-- `checkout(tip_amount, confirm)` — preview then place (auto-detects store_type)
+- `set_tip(tip_amount)` — set delivery tip (persists until order is placed)
+- `checkout(confirm)` — preview then place (auto-detects store_type)
 - `get_payment_methods` — available payment methods and cards
 
 **Order Tracking**
@@ -227,8 +244,8 @@ The plugin works with all Rappi store types. Cart, checkout, and order tracking 
 
 The MCP server supports two modes:
 
-- **Local (stdio)**: For Claude Code and Claude Desktop — runs as a subprocess
-- **Remote (SSE over HTTP)**: For Claude Cowork — deployed to Railway
+- **Local (stdio)**: For Claude Code, Claude Desktop, and OpenClaw — runs as a subprocess
+- **Remote (SSE over HTTP)**: For Claude Cowork and OpenClaw — deployed to Railway
 
 ### Railway Deployment
 
@@ -264,10 +281,14 @@ After deploying to Railway:
 
 ```bash
 # Generate the Cowork plugin zip with your Railway URL
-uv run rappi build-plugin --url https://your-app.up.railway.app/sse
+uv run rappi build-plugin build --url https://your-app.up.railway.app/sse
+
+# Or generate an OpenClaw bundle
+uv run rappi build-plugin build --target openclaw --url https://your-app.up.railway.app/sse
 ```
 
-This creates `rappi-cowork-plugin.zip` on your Desktop. Upload it to Cowork > Customize > Plugins, then add the SSE URL as a remote MCP connector.
+For Cowork: upload the zip via Cowork > Customize > Plugins, then add the SSE URL as a remote MCP connector.
+For OpenClaw: `openclaw plugins install ~/Desktop/rappi-openclaw-plugin.zip && openclaw gateway restart`.
 
 See [CLAUDE.md](CLAUDE.md) for the full deployment reference including the critical FastMCP patterns.
 

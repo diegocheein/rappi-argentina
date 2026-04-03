@@ -2,9 +2,11 @@
 
 ## What This Project Is
 
-A **Claude plugin** for ordering food from Rappi (Colombia's leading delivery platform). The plugin gives Claude the ability to search restaurants, browse menus, manage a cart, place orders, and track deliveries — with a local memory system that learns the user's preferences over time.
+A **plugin** for ordering food from Rappi (Colombia's leading delivery platform). Works on **Claude** (Code, Desktop, Cowork) and **OpenClaw**. The plugin gives the AI the ability to search restaurants, browse menus, manage a cart, place orders, and track deliveries — with a local memory system that learns the user's preferences over time.
 
-The plugin consists of: **skills** (what Claude follows), **MCP tools** (what Claude calls), **an agent** (specialized ordering intelligence), **memory** (SQLite persistence), and a **CLI** (terminal alternative).
+The plugin consists of: **skills** (workflow instructions), **MCP tools** (39 capabilities), **an agent** (specialized ordering intelligence — Claude only), **memory** (SQLite persistence), and a **CLI** (terminal alternative).
+
+**Cross-platform support**: The same codebase serves both Claude and OpenClaw. Skills and MCP tools auto-map to OpenClaw's bundle system. See `docs/openclaw-setup.md` for OpenClaw-specific setup.
 
 ## Quick Reference
 
@@ -36,7 +38,7 @@ rappi-claude-plugin/
 │   └── rappi-agent.md           # Specialized ordering agent (Sonnet)
 │
 ├── src/rappi/                   # Plugin engine
-│   ├── mcp/server.py            # 38 MCP tools (stdio + SSE transport)
+│   ├── mcp/server.py            # 39 MCP tools (stdio + SSE transport)
 │   ├── services/                # Shared business logic
 │   │   ├── auth.py              # Authentication, profile
 │   │   ├── address.py           # Delivery addresses
@@ -68,7 +70,7 @@ Claude Code / Desktop (local)     Claude Cowork (web)
     stdio transport               SSE over HTTP (Railway)
         |                                |
         +---------- MCP Server ----------+
-                  38 tools
+                  39 tools
                       |
         +------ Services Layer ------+---- CLI (terminal alternative)
                       |
@@ -89,7 +91,7 @@ Claude Code / Desktop (local)     Claude Cowork (web)
 | `skills/order-food/SKILL.md` | Main skill — triggers on food/ordering requests |
 | `agents/rappi-agent.md` | Specialized agent with full Rappi API knowledge |
 | `skills/rappi-suggest/SKILL.md` | Smart suggestions skill — taste-aware recommendations |
-| `src/rappi/mcp/server.py` | 38 MCP tools (the plugin's capabilities) |
+| `src/rappi/mcp/server.py` | 39 MCP tools (the plugin's capabilities) |
 | `src/rappi/services/home.py` | Homepage verticals discovery |
 | `src/rappi/services/dynamic.py` | Store aisles/categories (dynamic content) |
 | `src/rappi/services/account.py` | Favorites, credits, active orders |
@@ -109,10 +111,10 @@ Skills are markdown files with YAML frontmatter. Claude auto-invokes them based 
 
 | Skill | Trigger | Allowed Tools |
 |-------|---------|---------------|
-| `/order-food` | Food ordering, "I'm hungry", mentions Rappi | All 38 MCP tools |
-| `/rappi-search` | "Find restaurants", "search for pizza", "find Turbo stores" | All 38 MCP tools |
-| `/rappi-reorder` | "Order the same", "reorder" | All 38 MCP tools |
-| `/rappi-suggest` | "What should I eat?", "suggest something" | All 38 MCP tools |
+| `/order-food` | Food ordering, "I'm hungry", mentions Rappi | All 39 MCP tools |
+| `/rappi-search` | "Find restaurants", "search for pizza", "find Turbo stores" | All 39 MCP tools |
+| `/rappi-reorder` | "Order the same", "reorder" | All 39 MCP tools |
+| `/rappi-suggest` | "What should I eat?", "suggest something" | All 39 MCP tools |
 
 ### Adding a New Skill
 
