@@ -36,6 +36,7 @@ from rappi.services.store import get_restaurant_catalog as _get_catalog
 from rappi.services.store import get_store_detail as _get_store_detail
 from rappi.services.store import search_store_products as _search_store_products
 from rappi.utils.ids import make_compound_id
+from rappi.utils.pricing import strip_html
 
 from mcp.server.fastmcp import FastMCP
 
@@ -390,7 +391,16 @@ async def set_delivery_address(address_id: int) -> dict:
     Next step: Search or browse restaurants for the new location.
     """
     async with _client_synced() as client:
-        await _set_active_address(client, address_id)
+        try:
+            await _set_active_address(client, address_id)
+        except Exception:
+            # The PUT endpoint may return 404 — update coordinates from address list instead
+            addresses = await _list_addresses(client)
+            found = next((a for a in addresses if a.id == address_id), None)
+            if not found:
+                return {"error": f"Address {address_id} not found"}
+            client._config.lat = found.lat
+            client._config.lng = found.lng
         return {"success": True, "address_id": address_id}
 
 
@@ -757,6 +767,17 @@ async def add_to_cart(
         }
 
 
+async def _detect_cart_store_type(client: RappiClient) -> str:
+    """Detect the store_type from the current cart. Falls back to 'restaurant'."""
+    try:
+        carts = await _get_carts(client)
+        if carts and carts[0].store_type:
+            return carts[0].store_type
+    except Exception:
+        pass
+    return "restaurant"
+
+
 @mcp.tool()
 async def view_cart() -> dict:
     """View current cart contents with items, quantities, prices, and totals.
@@ -774,6 +795,7 @@ async def view_cart() -> dict:
                 result_stores.append({
                     "store_id": store.id,
                     "store_name": store.name,
+                    "store_type": cart.store_type,
                     "is_open": store.is_open,
                     "products": [
                         {
@@ -801,8 +823,9 @@ async def remove_from_cart(store_id: int, product_id: int) -> dict:
     """
     compound_id = make_compound_id(store_id, product_id)
     async with _client_synced() as client:
-        await _remove_from_cart(client, compound_id)
-        return {"success": True, "removed": compound_id}
+        store_type = await _detect_cart_store_type(client)
+        await _remove_from_cart(client, compound_id, store_type=store_type)
+        return {"success": True, "removed": compound_id, "store_type": store_type}
 
 
 @mcp.tool()
@@ -813,32 +836,34 @@ async def checkout(tip_amount: int = 0, confirm: bool = False) -> dict:
     Only call with confirm=True after the user explicitly approves.
 
     When to use: After the user is done adding items and wants to review or place the order.
-    Next step: If preview, show the summary and ask user to confirm. If placed, use get_order_status to track.
+    Next step: If preview, show the summary and ask user to confirm. If placed, use track_order to follow delivery.
     """
     async with _client_synced() as client:
-        await _recalculate_cart(client)
+        store_type = await _detect_cart_store_type(client)
+
+        await _recalculate_cart(client, store_type=store_type)
 
         if tip_amount > 0:
-            await _set_tip(client, tip_amount)
+            await _set_tip(client, tip_amount, store_type=store_type)
 
-        detail = await _get_checkout_detail(client)
+        detail = await _get_checkout_detail(client, store_type=store_type)
 
         summary = []
         for s in detail.summary:
-            items = [{"type": d.type, "label": d.key, "value": d.value} for d in s.details]
+            items = [{"type": d.type, "label": strip_html(d.key), "value": strip_html(d.value)} for d in s.details]
             summary.append({
                 "store": s.header.title if s.header else None,
                 "items": items,
             })
 
         if not confirm:
-            return {"preview": True, "summary": summary, "return_key_available": bool(detail.return_key)}
+            return {"preview": True, "store_type": store_type, "summary": summary, "return_key_available": bool(detail.return_key)}
 
         if not detail.return_key:
             return {"error": "No return_key — cannot place order. Cart may be empty or invalid."}
 
-        result = await _place_order(client, detail.return_key)
-        return {"placed": True, "summary": summary, "result": result}
+        result = await _place_order(client, detail.return_key, store_type=store_type)
+        return {"placed": True, "store_type": store_type, "summary": summary, "result": result}
 
 
 @mcp.tool()
