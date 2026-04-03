@@ -4,6 +4,7 @@ import typer
 
 from rappi.cli.address import app as address_app
 from rappi.cli.auth import app as auth_app
+from rappi.cli.build_plugin import app as build_plugin_app
 from rappi.cli.cart import app as cart_app
 from rappi.cli.favorites import app as favorites_app
 from rappi.cli.history import app as history_app
@@ -28,6 +29,7 @@ app.add_typer(order_app, name="order", help="Checkout and order tracking")
 app.add_typer(history_app, name="history", help="Order history")
 app.add_typer(favorites_app, name="favorites", help="Manage favorite stores")
 app.add_typer(prefs_app, name="prefs", help="User preferences")
+app.add_typer(build_plugin_app, name="build-plugin", help="Build Cowork plugin zip")
 
 
 @app.command()

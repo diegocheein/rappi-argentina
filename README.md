@@ -67,10 +67,11 @@ claude   # MCP server auto-registers from .mcp.json
 }
 ```
 
-**Claude Cowork** (web — uses Railway deployment):
-1. Upload `rappi-cowork-plugin.zip` via Cowork > Customize > Plugins
-2. Add remote MCP connector: `https://rappi-claude-plugin-production.up.railway.app/sse`
-3. See [Deployment](#deployment) section for Railway setup
+**Claude Cowork** (web — requires remote MCP server):
+1. Deploy the MCP server (see [Deployment](#deployment))
+2. Generate plugin zip: `uv run rappi build-plugin --url https://your-server.up.railway.app/sse`
+3. Upload the zip via Cowork > Customize > Plugins
+4. Add the SSE URL as a remote MCP connector
 
 ## What You Can Do
 
@@ -215,9 +216,13 @@ The MCP server supports two modes:
 
 ### Railway Deployment
 
-The repo auto-deploys to Railway on every push. The server runs as an SSE endpoint.
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/rappi-mcp?referralCode=rappi-claude-plugin)
 
-**Environment variables** (set in Railway dashboard):
+Or deploy manually:
+
+1. Fork this repo to your GitHub account
+2. Connect it to [Railway](https://railway.com) (New Project → Deploy from GitHub)
+3. Set environment variables in Railway dashboard:
 
 | Variable | Value | Purpose |
 |----------|-------|---------|
@@ -225,9 +230,27 @@ The repo auto-deploys to Railway on every push. The server runs as an SSE endpoi
 | `RAPPI_DEVICE_ID` | UUID | Device ID from config |
 | `MCP_TRANSPORT` | `sse` | Enables HTTP transport |
 
+4. Railway auto-assigns a URL like `https://your-app.up.railway.app`
+5. Verify: `curl https://your-app.up.railway.app/health` should return `ok`
+
 Coordinates are auto-synced from your Rappi active address — no need to set lat/lng.
 
-**Cowork plugin**: Upload `rappi-cowork-plugin.zip` to Cowork, add the Railway URL as a remote MCP connector.
+**Get your token and device ID:**
+```bash
+uv run rappi auth login                    # Authenticate first
+cat ~/.rappi/config.json | python3 -c "import json,sys; c=json.load(sys.stdin); print(f'RAPPI_TOKEN={c[\"token\"]}\nRAPPI_DEVICE_ID={c[\"device_id\"]}')"
+```
+
+### Cowork Plugin Setup
+
+After deploying to Railway:
+
+```bash
+# Generate the Cowork plugin zip with your Railway URL
+uv run rappi build-plugin --url https://your-app.up.railway.app/sse
+```
+
+This creates `rappi-cowork-plugin.zip` on your Desktop. Upload it to Cowork > Customize > Plugins, then add the SSE URL as a remote MCP connector.
 
 See [CLAUDE.md](CLAUDE.md) for the full deployment reference including the critical FastMCP patterns.
 
