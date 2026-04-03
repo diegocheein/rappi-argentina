@@ -36,3 +36,11 @@ async def place_order(
     """Place the order. Requires return_key from checkout detail."""
     path = Endpoints.PLACE_ORDER.format(store_type=store_type)
     return await client.post(path, json={"return_key": return_key})
+
+
+async def get_payment_methods(client: RappiClient) -> dict:
+    """Get available payment methods and saved cards."""
+    try:
+        return await client.get(Endpoints.DEFAULT_PAYMENT_METHOD)
+    except Exception:
+        return {"error": "Could not fetch payment methods. This endpoint may require an active cart."}

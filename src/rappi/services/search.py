@@ -5,6 +5,20 @@ from rappi.constants import Endpoints
 from rappi.models.store import SearchResponse, SearchStore
 
 
+async def search_cpg_products(
+    client: RappiClient, store_id: int, query: str, page: int = 0, limit: int = 20
+) -> list[dict]:
+    """Search products in a CPG store (Turbo, markets) — richer than unified search.
+
+    Returns full product objects with brand, attributes, category info.
+    """
+    path = Endpoints.CPG_PRODUCT_SEARCH.format(store_id=store_id)
+    data = await client.post(path, json={"from": page, "query": query, "size": limit})
+    if isinstance(data, list):
+        return data
+    return data.get("products", data.get("data", []))
+
+
 async def search(
     client: RappiClient,
     query: str,

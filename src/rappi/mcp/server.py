@@ -18,7 +18,19 @@ from rappi.services.checkout import get_checkout_detail as _get_checkout_detail
 from rappi.services.checkout import place_order as _place_order
 from rappi.services.checkout import set_tip as _set_tip
 from rappi.services.order import get_orders as _get_orders
+from rappi.services.order import get_order_resume as _get_order_resume
+from rappi.services.order import get_order_realtime_state as _get_order_realtime_state
+from rappi.services.order import get_order_cost_breakdown as _get_order_cost_breakdown
 from rappi.services.search import search as _search
+from rappi.services.search import search_cpg_products as _search_cpg_products
+from rappi.services.home import get_home_verticals as _get_home_verticals
+from rappi.services.dynamic import get_store_aisles as _get_store_aisles
+from rappi.services.dynamic import get_aisle_products as _get_aisle_products
+from rappi.services.dynamic import get_store_information as _get_store_info
+from rappi.services.account import get_favorite_stores_api as _get_favorite_stores_api
+from rappi.services.account import get_rappi_credits as _get_rappi_credits
+from rappi.services.account import get_active_orders_v3 as _get_active_orders_v3
+from rappi.services.checkout import get_payment_methods as _get_payment_methods
 from rappi.services.store import get_product_toppings as _get_toppings
 from rappi.services.store import get_restaurant_catalog as _get_catalog
 from rappi.services.store import get_store_detail as _get_store_detail
@@ -1080,6 +1092,254 @@ async def score_menu(store_id: int) -> dict:
                     "scoring_method": s["source"],
                 }
                 for s in scored[:15]
+            ],
+        }
+
+
+# --- Discovery & Browsing Tools ---
+
+
+@mcp.tool()
+async def explore_verticals() -> dict:
+    """Show all available store types in your area — Restaurants, Turbo, Markets, Licores, Farmacia, etc.
+
+    When to use: User asks "what can I order?", "what's available?", or wants to see all options.
+    Next step: Use browse_restaurants, browse_stores, or get_store_categories depending on what they pick.
+    """
+    async with _client_synced() as client:
+        verticals = await _get_home_verticals(client)
+        return {
+            "verticals": [
+                {
+                    "id": v.get("id"),
+                    "name": v.get("title", v.get("description", "Unknown")),
+                    "description": v.get("description", ""),
+                }
+                for v in verticals[:20]
+                if isinstance(v, dict)
+            ],
+        }
+
+
+@mcp.tool()
+async def get_store_categories(store_id: int, store_type: str = "turbo", parent_store_type: str = "turbo_home") -> dict:
+    """Browse a store's aisles/categories — see what sections are available (Snacks, Bebidas, Aseo, etc.).
+
+    store_type: "turbo", "market", "super", etc.
+    parent_store_type: "turbo_home" for Turbo, "market" for markets.
+
+    When to use: User wants to browse a non-restaurant store by category instead of searching.
+    Next step: Use get_aisle_products with an aisle_id to see products in a category.
+    """
+    async with _client_synced() as client:
+        aisles = await _get_store_aisles(client, store_id, store_type, parent_store_type)
+        return {
+            "store_id": store_id,
+            "categories": [
+                {
+                    "id": a.get("id", a.get("aisle_id", a.get("corridor_id"))),
+                    "name": a.get("name", a.get("description", a.get("title", "Unknown"))),
+                    "image": a.get("image", a.get("icon")),
+                    "product_count": a.get("product_count", a.get("products_count", 0)),
+                }
+                for a in aisles[:30]
+                if isinstance(a, dict)
+            ],
+        }
+
+
+@mcp.tool()
+async def get_aisle_products(
+    store_id: int, aisle_id: str, store_type: str = "turbo",
+    parent_store_type: str = "turbo_home", max_products: int = 30,
+) -> dict:
+    """Get products within a specific store aisle/category.
+
+    aisle_id: The category ID from get_store_categories results.
+
+    When to use: User picked a category and wants to see what's in it.
+    Next step: Use add_to_cart with product_id, product_name, product_price to add items.
+    """
+    async with _client_synced() as client:
+        products = await _get_aisle_products(client, store_id, aisle_id, store_type, parent_store_type)
+        return {
+            "store_id": store_id,
+            "aisle_id": aisle_id,
+            "products": [
+                {
+                    "product_id": p.get("id", p.get("product_id")),
+                    "name": p.get("name", p.get("product_name", "Unknown")),
+                    "price": p.get("price", p.get("real_price", 0)),
+                    "real_price": p.get("real_price", p.get("price", 0)),
+                    "in_stock": p.get("in_stock", p.get("is_available", True)),
+                    "image": p.get("image"),
+                    "brand": p.get("brand", p.get("brand_name")),
+                    "quantity_label": p.get("quantity", p.get("presentation")),
+                }
+                for p in products[:max_products]
+                if isinstance(p, dict)
+            ],
+        }
+
+
+@mcp.tool()
+async def get_store_info(store_id: int, parent_store_type: str = "turbo_home") -> dict:
+    """Get store details — hours, delivery charges, address, status.
+
+    When to use: User wants to know if a store is open, delivery fee, or minimum order.
+    """
+    async with _client_synced() as client:
+        info = await _get_store_info(client, store_id, parent_store_type)
+        return {"store_id": store_id, "info": info}
+
+
+@mcp.tool()
+async def search_store_products(store_id: int, query: str, max_results: int = 20) -> dict:
+    """Search for products within a CPG store (Turbo, markets) — richer than unified search.
+
+    Returns detailed product info including brand, attributes, and category.
+
+    When to use: User wants to find a specific product in a Turbo or market store.
+    Next step: Use add_to_cart with product_id, product_name, product_price.
+    """
+    async with _client_synced() as client:
+        products = await _search_cpg_products(client, store_id, query, limit=max_results)
+        return {
+            "store_id": store_id,
+            "query": query,
+            "products": [
+                {
+                    "product_id": p.get("id", p.get("product_id")),
+                    "name": p.get("name", p.get("product_name", "Unknown")),
+                    "price": p.get("price", 0),
+                    "real_price": p.get("real_price", p.get("price", 0)),
+                    "in_stock": p.get("in_stock", p.get("is_available", True)),
+                    "brand": p.get("brand", p.get("brand_name")),
+                    "category": p.get("category_name", p.get("category")),
+                    "quantity_label": p.get("quantity", p.get("presentation")),
+                    "has_toppings": p.get("has_toppings", False),
+                }
+                for p in products[:max_results]
+                if isinstance(p, dict)
+            ],
+        }
+
+
+# --- Order Tracking Tools ---
+
+
+@mcp.tool()
+async def get_order_detail(order_id: int) -> dict:
+    """Get full order summary — products, totals, store, delivery address.
+
+    When to use: User wants to see details of a specific past or active order.
+    """
+    async with _client_synced() as client:
+        data = await _get_order_resume(client, order_id)
+        return {"order_id": order_id, "detail": data}
+
+
+@mcp.tool()
+async def track_order(order_id: int) -> dict:
+    """Track an active order — real-time state, ETA, driver position, timeline.
+
+    When to use: User wants to know where their order is, when it arrives, or who the driver is.
+    """
+    async with _client_synced() as client:
+        state = await _get_order_realtime_state(client, order_id)
+        return {
+            "order_id": order_id,
+            "state": state.get("flow_key", state.get("state", "unknown")),
+            "eta": state.get("eta", state.get("estimated_time")),
+            "driver": {
+                "name": state.get("driver_name", state.get("shopper_name")),
+                "lat": state.get("driver_lat"),
+                "lng": state.get("driver_lng"),
+            } if state.get("driver_name") or state.get("shopper_name") else None,
+            "timeline": state.get("timeline", state.get("steps", [])),
+            "raw": {k: v for k, v in state.items() if k not in ("timeline", "steps")} if not state.get("flow_key") else None,
+        }
+
+
+@mcp.tool()
+async def get_order_breakdown(order_id: int) -> dict:
+    """Get detailed cost breakdown for an order — subtotal, delivery, service fee, tip, discounts.
+
+    When to use: User asks "how much did I pay?", "what were the fees?", or wants receipt details.
+    """
+    async with _client_synced() as client:
+        data = await _get_order_cost_breakdown(client, order_id)
+        return {"order_id": order_id, "breakdown": data}
+
+
+# --- Payment & Account Tools ---
+
+
+@mcp.tool()
+async def get_payment_methods() -> dict:
+    """Get available payment methods and saved cards.
+
+    When to use: User wants to see their payment options or check which card is active.
+    """
+    async with _client_synced() as client:
+        data = await _get_payment_methods(client)
+        return {"payment_methods": data}
+
+
+@mcp.tool()
+async def get_rappi_favorites() -> dict:
+    """Get favorite stores from Rappi's API — shows stores the user has favorited in the app.
+
+    When to use: User asks about their favorite stores or wants to order from a saved place.
+    Next step: Use get_restaurant_menu or search_store_products on the store.
+    """
+    async with _client_synced() as client:
+        stores = await _get_favorite_stores_api(client)
+        return {
+            "favorites": [
+                {
+                    "store_id": s.get("store_id", s.get("id")),
+                    "name": s.get("name", s.get("store_name", "Unknown")),
+                    "store_type": s.get("store_type"),
+                    "logo": s.get("logo", s.get("image")),
+                }
+                for s in stores[:20]
+                if isinstance(s, dict)
+            ],
+        }
+
+
+@mcp.tool()
+async def get_credits_balance() -> dict:
+    """Get Rappi credits/wallet balance.
+
+    When to use: User asks "how much credit do I have?" or before checkout to check balance.
+    """
+    async with _client_synced() as client:
+        data = await _get_rappi_credits(client)
+        return {"credits": data}
+
+
+@mcp.tool()
+async def get_active_orders() -> dict:
+    """Get currently active orders (being prepared, on the way, etc.).
+
+    When to use: User asks "where is my order?" or "do I have any orders?".
+    Next step: Use track_order with the order_id for real-time tracking.
+    """
+    async with _client_synced() as client:
+        orders = await _get_active_orders_v3(client)
+        return {
+            "orders": [
+                {
+                    "order_id": o.get("id", o.get("order_id")),
+                    "store_name": o.get("store_name", o.get("store", {}).get("name") if isinstance(o.get("store"), dict) else None),
+                    "state": o.get("state", o.get("status")),
+                    "total": o.get("total", o.get("total_value")),
+                    "eta": o.get("eta", o.get("estimated_time")),
+                }
+                for o in orders[:10]
+                if isinstance(o, dict)
             ],
         }
 

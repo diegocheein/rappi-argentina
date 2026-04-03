@@ -76,6 +76,28 @@ class Endpoints:
 
     # Orders
     GET_ORDERS = "/api/user-order-home/orders"
+    ACTIVE_ORDERS_V3 = "/api/user-order-home/v3/orders"
+    ORDER_RESUME = "/order-resume/fully/{order_id}"
+    ORDER_REALTIME_STATE = "/api/ms/user-order-state/auth/{order_id}"
+    ORDER_PRODUCTS = "/api/support-order-cost/orders/{order_id}/products"
+    ORDER_COST_BREAKDOWN = "/api/support-order-cost/orders/{order_id}/costs-and-discounts"
+
+    # Homepage / Verticals
+    HOME_VERTICALS = "/home/high/"
+    STORE_TYPE_HIERARCHY = "/api/web-gateway/web/stores-router/available/principal/"
+
+    # Dynamic Content (store browsing — aisles, categories, store info)
+    DYNAMIC_CONTENT = "/api/web-gateway/web/dynamic/context/content/"
+
+    # CPG In-Store Search (Turbo, markets — richer than unified search)
+    CPG_PRODUCT_SEARCH = "/api/cpgs/search/v2/store/{store_id}/products"
+
+    # Payment
+    DEFAULT_PAYMENT_METHOD = "/api/ms/payment-method/default-payment-method"
+
+    # Account
+    FAVORITE_STORES_API = "/api/pns-global-search-api/v1/unified-favorite-stores"
+    RAPPI_CREDITS = "/api/ms/rappi-credits-mongo/"
 
 
 def resolve_image_url(path: str | None, prefix: str = "products") -> str | None:
