@@ -832,11 +832,12 @@ async def remove_from_cart(store_id: int, product_id: int) -> dict:
 async def checkout(tip_amount: int = 0, confirm: bool = False) -> dict:
     """Preview checkout summary or place the order.
 
-    tip_amount: Delivery tip in COP (e.g., 3000 for $3.000). MUST be passed on BOTH
-    the preview call AND the confirm call — the tip is set fresh each time.
+    tip_amount: Delivery tip in COP (e.g., 3000 for $3.000). The tip is saved on
+    Rappi's server, so it persists between preview and confirm calls. Pass it on
+    the preview call — it will still be there when you confirm.
 
     IMPORTANT: Always call with confirm=False first to show the summary to the user.
-    Only call with confirm=True AND the same tip_amount after the user explicitly approves.
+    Only call with confirm=True after the user explicitly approves.
     NEVER place an order without explicit user confirmation.
 
     When to use: After the user is done adding items and wants to review or place the order.
@@ -845,7 +846,7 @@ async def checkout(tip_amount: int = 0, confirm: bool = False) -> dict:
     async with _client_synced() as client:
         store_type = await _detect_cart_store_type(client)
 
-        # Set tip BEFORE recalculate so it's included in the total
+        # Set tip BEFORE recalculate — tip persists on Rappi's server between calls
         if tip_amount > 0:
             await _set_tip(client, tip_amount, store_type=store_type)
 
@@ -1323,6 +1324,21 @@ async def get_order_breakdown(order_id: int) -> dict:
 
 
 # --- Payment & Account Tools ---
+
+
+@mcp.tool()
+async def set_tip(tip_amount: int) -> dict:
+    """Set the delivery tip amount. This persists on Rappi's server until the order is placed.
+
+    tip_amount: Tip in COP (e.g., 3000 for $3.000). Use 0 to remove tip.
+
+    When to use: Before checkout, or when the user wants to change the tip.
+    The tip set here will show in the checkout preview and be included when placing.
+    """
+    async with _client_synced() as client:
+        store_type = await _detect_cart_store_type(client)
+        await _set_tip(client, tip_amount, store_type=store_type)
+        return {"success": True, "tip_amount": tip_amount, "store_type": store_type}
 
 
 @mcp.tool()
