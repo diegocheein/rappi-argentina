@@ -34,11 +34,12 @@ Help the user reorder from their order history.
 
 8. If some items failed, ask if they want to proceed with what was added or find replacements.
 
-9. Call `checkout(confirm=false)` to show the order summary.
+9. Set the tip: call `set_tip(tip_amount)` — check preferences for a default tip amount.
+
+10. Call `checkout(confirm=false)` to show the order summary.
    - Mention `get_credits_balance()` if they have Rappi credits
 
-10. After user confirms, call `checkout(tip_amount=X, confirm=true)` to place the order.
-   - Check preferences for a default tip amount
+11. After user confirms, call `checkout(confirm=true)` to place the order.
    - NEVER place without explicit user confirmation
 
 11. After placing, offer to track with `track_order(order_id)`.
