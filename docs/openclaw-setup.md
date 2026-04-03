@@ -8,78 +8,69 @@ OpenClaw recognizes the Rappi plugin as a **bundle** — it reads the `.claude-p
 
 - [OpenClaw](https://openclaw.ai) installed and running
 - Python 3.12+
-- [uv](https://docs.astral.sh/uv/) (Python package manager)
+- [uv](https://docs.astral.sh/uv/) (Python package manager — the install script can set this up for you)
 - A Rappi account (Colombia or Mexico)
 
-## Option A: Local Installation (Recommended)
+## Quick Install (One Command)
+
+The install script handles everything — uv, dependencies, MCP registration, and skill installation:
+
+```bash
+git clone https://github.com/garavitgabriel/rappi-claude-plugin.git
+cd rappi-claude-plugin
+./install-openclaw.sh
+```
+
+Then authenticate (see [Authentication](#authentication)) and restart the gateway:
+
+```bash
+openclaw gateway restart
+```
+
+## Manual Installation
+
+### Option A: Local (Recommended)
 
 This runs the MCP server as a local subprocess — same as Claude Code. Best for personal use.
 
-### 1. Clone and install
+#### 1. Clone and install
 
 ```bash
 git clone https://github.com/garavitgabriel/rappi-claude-plugin.git
 cd rappi-claude-plugin
 uv sync
-uv run playwright install chromium
 ```
 
-### 2. Authenticate with Rappi
+#### 2. Register MCP server with OpenClaw
 
 ```bash
-# Colombia (default)
-uv run rappi auth login
+# Auto-register
+openclaw mcp set rappi '{"command":"uv","args":["run","--project","/path/to/rappi-claude-plugin","rappi-mcp"]}'
 
-# Mexico
-uv run rappi auth login --country mx
-```
-
-### 3. Install as OpenClaw bundle
-
-```bash
+# Or install as a bundle (if supported by your OpenClaw version)
 openclaw plugins install ./rappi-claude-plugin
+```
+
+#### 3. Install skills
+
+Copy the skills to your OpenClaw workspace:
+
+```bash
+cp -r skills/* ~/.openclaw/workspace/skills/
+```
+
+#### 4. Authenticate and restart
+
+```bash
+uv run rappi auth login        # Browser auth (see below for headless)
 openclaw gateway restart
 ```
 
-### 4. Verify
-
-```bash
-openclaw plugins list          # Should show "rappi" bundle
-openclaw plugins inspect rappi # Check details
-```
-
-### 5. Use it
-
-Start a conversation with OpenClaw and try:
-- "Search for pizza on Rappi"
-- "What's available on Rappi near me?"
-- "Order me a burger"
-
-The plugin auto-activates when you mention food, ordering, or Rappi.
-
-### How it works
-
-OpenClaw reads the `.mcp.json` in the plugin root:
-```json
-{
-  "mcpServers": {
-    "rappi": {
-      "command": "uv",
-      "args": ["run", "--project", ".", "rappi-mcp"]
-    }
-  }
-}
-```
-
-This spawns the MCP server as a subprocess using stdio transport. The 39 tools become available as `rappi__<tool_name>` in OpenClaw.
-
-The 4 skills (`order-food`, `rappi-search`, `rappi-reorder`, `rappi-suggest`) are loaded as OpenClaw skills automatically.
-
-## Option B: Remote MCP Server
+### Option B: Remote MCP Server
 
 Connect OpenClaw to a deployed MCP server over HTTP. Best for shared setups or when you don't want Python installed on the OpenClaw machine.
 
-### 1. Deploy the MCP server
+#### 1. Deploy the MCP server
 
 Deploy to Railway (or any host). See the main [README deployment section](../README.md#deployment) for full instructions.
 
@@ -88,26 +79,51 @@ Quick version:
 2. Set env vars: `MCP_TRANSPORT=sse`, `RAPPI_TOKEN`, `RAPPI_DEVICE_ID`, `RAPPI_COUNTRY`
 3. Verify: `curl https://your-app.up.railway.app/health` returns `ok`
 
-### 2. Generate the OpenClaw bundle
+#### 2. Generate and install the OpenClaw bundle
 
 ```bash
 uv run rappi build-plugin build --target openclaw --url https://your-app.up.railway.app/sse
-```
-
-This creates a bundle zip with the SSE URL pre-configured.
-
-### 3. Install the bundle
-
-```bash
 openclaw plugins install ~/Desktop/rappi-openclaw-plugin.zip
 openclaw gateway restart
 ```
 
-### 4. Verify
+## Authentication
+
+### With a browser (interactive)
 
 ```bash
-openclaw plugins list
-openclaw plugins inspect rappi
+uv run rappi auth login              # Colombia (default)
+uv run rappi auth login --country mx # Mexico
+```
+
+This opens a browser window for Rappi's login flow (phone number + OTP).
+
+### Headless servers (no browser — SSH, VPS, etc.)
+
+Use the `token` command to set credentials directly:
+
+```bash
+uv run rappi auth token <RAPPI_TOKEN> <DEVICE_ID>
+uv run rappi auth token <RAPPI_TOKEN> <DEVICE_ID> --country mx  # Mexico
+```
+
+**How to get your token and device ID:**
+
+1. On a machine where you've already logged in via browser:
+   ```bash
+   cat ~/.rappi/config.json
+   # Copy the "token" and "device_id" values
+   ```
+
+2. Or capture from Rappi's website via browser DevTools:
+   - Open rappi.com.co → DevTools → Network tab
+   - Look for any API request's `Authorization` header (the Bearer token)
+   - Look for the `x-device-id` header (the device ID)
+
+### Verify authentication
+
+```bash
+uv run rappi auth status
 ```
 
 ## What Gets Mapped
@@ -123,26 +139,27 @@ openclaw plugins inspect rappi
 
 ## Tool Naming
 
-In OpenClaw, MCP tools are prefixed with the server name:
+MCP tools have different naming conventions per platform:
 
-| Claude Code | OpenClaw |
+| Claude Code / Cowork | OpenClaw |
 |---|---|
 | `mcp__rappi__search_restaurants` | `rappi__search_restaurants` |
 | `mcp__rappi__add_to_cart` | `rappi__add_to_cart` |
 | `mcp__rappi__checkout` | `rappi__checkout` |
 
-The skills reference tools using the Claude naming convention (`mcp__rappi__*`). OpenClaw's bundle mapper handles the translation.
+The skills reference tools using `mcp__rappi__*` (Claude convention). OpenClaw's bundle mapper translates these automatically. If you're writing custom prompts for OpenClaw, use `rappi__<tool_name>` directly.
 
 ## Configuration
 
 ### Country
 
-Set your country before authenticating:
+Set your country when authenticating:
 
 ```bash
-# In the plugin directory
 uv run rappi auth login --country co   # Colombia
 uv run rappi auth login --country mx   # Mexico
+# Or with direct token:
+uv run rappi auth token <token> <device_id> --country mx
 ```
 
 For remote deployments, set `RAPPI_COUNTRY` as an environment variable on your server.
@@ -181,9 +198,15 @@ Re-authenticate:
 ```bash
 cd /path/to/rappi-claude-plugin
 uv run rappi auth login
+# Or on headless:
+uv run rappi auth token <new_token> <device_id>
 ```
 
 For remote deployments, update `RAPPI_TOKEN` in your Railway dashboard.
+
+### Browser auth fails on headless server
+
+Use the `token` command instead — see [Headless servers](#headless-servers-no-browser--ssh-vps-etc).
 
 ### 403 errors from Rappi API
 
@@ -198,4 +221,5 @@ The `app-version` header may be outdated. See [Updating the app-version Header](
 | Agent | `rappi-agent.md` (Sonnet) | Not supported (agents ignored) |
 | Memory | Full (SQLite local) | Full (SQLite local) |
 | Remote deploy | Railway + Cowork zip | Railway + bundle install |
-| Auth | `rappi auth login` | `rappi auth login` (same) |
+| Auth | `rappi auth login` | `rappi auth login` or `rappi auth token` |
+| Install | Auto-discovered from `.mcp.json` | `./install-openclaw.sh` or manual |

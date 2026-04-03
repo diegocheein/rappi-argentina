@@ -128,6 +128,50 @@ def status() -> None:
 
 
 @app.command()
+def token(
+    bearer_token: str = typer.Argument(..., help="Rappi Bearer token (starts with 'ft.')"),
+    device_id: str = typer.Argument(..., help="Device ID (UUID from browser DevTools)"),
+    country: str = typer.Option("co", "--country", "-c", help="Country code: co (Colombia), mx (Mexico)"),
+) -> None:
+    """Set auth credentials directly — no browser needed. Ideal for headless servers.
+
+    Get your token and device ID from ~/.rappi/config.json on a machine where you've
+    already logged in, or capture them from Rappi's website via browser DevTools.
+    """
+    import os
+    os.environ["RAPPI_COUNTRY"] = country
+    import importlib
+    import rappi.constants
+    importlib.reload(rappi.constants)
+
+    if not bearer_token.startswith("ft."):
+        console.print("[yellow]Warning:[/yellow] Token doesn't start with 'ft.' — this may not work.")
+
+    config_manager = ConfigManager()
+    config_manager.update(token=bearer_token, device_id=device_id, country=country)
+
+    # Verify
+    async def _verify():
+        async with RappiClient(config_manager=config_manager) as client:
+            return await get_profile(client)
+
+    try:
+        profile = asyncio.run(_verify())
+        console.print(Panel(
+            f"[green]Logged in as [bold]{profile.name}[/bold][/green]\n"
+            f"Email: {profile.email}\n"
+            f"Country: {country.upper()}",
+            title="Token Saved",
+        ))
+    except TokenExpiredError:
+        console.print("[red]Token appears to be invalid or expired.[/red]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[yellow]Token saved but verification failed:[/yellow] {e}")
+        console.print("The token may still work — try [bold]rappi auth status[/bold].")
+
+
+@app.command()
 def logout() -> None:
     """Clear saved authentication token."""
     config_manager = ConfigManager()

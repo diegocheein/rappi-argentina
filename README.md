@@ -56,6 +56,10 @@ uv run rappi auth login
 
 # Mexico
 uv run rappi auth login --country mx
+
+# Headless servers (no browser — SSH, VPS, etc.)
+uv run rappi auth token <RAPPI_TOKEN> <DEVICE_ID>
+uv run rappi auth token <RAPPI_TOKEN> <DEVICE_ID> --country mx
 ```
 
 Your token is saved locally at `~/.rappi/config.json`. It never leaves your machine.
@@ -88,10 +92,11 @@ claude   # MCP server auto-registers from .mcp.json
 3. Upload the zip via Cowork > Customize > Plugins
 4. Add the SSE URL as a remote MCP connector
 
-**OpenClaw** (local — auto-discovers as bundle):
+**OpenClaw** (one-command install):
 ```bash
 cd rappi-claude-plugin
-openclaw plugins install .
+./install-openclaw.sh       # Handles uv, deps, MCP registration, skills
+uv run rappi auth login     # Or: rappi auth token <TOKEN> <DEVICE_ID> (headless)
 openclaw gateway restart
 ```
 
