@@ -34,7 +34,7 @@ rappi-claude-plugin/
 │   └── rappi-agent.md           # Specialized ordering agent (Sonnet)
 │
 └── src/rappi/                   # Plugin engine
-    ├── mcp/server.py            # 25 MCP tools
+    ├── mcp/server.py            # 38 MCP tools
     ├── services/                # Shared business logic
     ├── memory/                  # SQLite + optional embeddings + intelligence engine
     ├── cli/                     # Terminal interface
@@ -69,7 +69,11 @@ MCP Tools (25)          (what Claude calls — structured JSON in/out)
 | `skills/order-food/SKILL.md` | Main skill — triggers on food/ordering requests |
 | `agents/rappi-agent.md` | Specialized agent with full Rappi API knowledge |
 | `skills/rappi-suggest/SKILL.md` | Smart suggestions skill — taste-aware recommendations |
-| `src/rappi/mcp/server.py` | 25 MCP tools (the plugin's capabilities) |
+| `src/rappi/mcp/server.py` | 38 MCP tools (the plugin's capabilities) |
+| `src/rappi/services/home.py` | Homepage verticals discovery |
+| `src/rappi/services/dynamic.py` | Store aisles/categories (dynamic content) |
+| `src/rappi/services/account.py` | Favorites, credits, active orders |
+| `API_ENDPOINTS.md` | Full Rappi API reference (captured from browser) |
 | `src/rappi/memory/manager.py` | MemoryManager facade (the plugin's brain) |
 | `src/rappi/memory/intelligence.py` | IntelligenceEngine — taste profile + recommendations |
 | `src/rappi/models/intelligence.py` | TasteProfile, Recommendation models |

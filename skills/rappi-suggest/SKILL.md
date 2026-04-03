@@ -2,7 +2,7 @@
 name: rappi-suggest
 description: Smart food suggestions based on your taste profile and ordering habits. Use when the user asks "what should I eat?", "suggest something", "I'm hungry but don't know what", or wants personalized recommendations.
 argument-hint: "[optional: 'lunch', 'something cheap', 'burger place']"
-allowed-tools: "mcp__rappi__get_taste_profile,mcp__rappi__get_recommendations,mcp__rappi__get_ordering_context,mcp__rappi__search_restaurants,mcp__rappi__browse_stores,mcp__rappi__get_restaurant_menu,mcp__rappi__add_to_cart,mcp__rappi__checkout,mcp__rappi__view_cart,mcp__rappi__quick_reorder"
+allowed-tools: "mcp__rappi__*"
 ---
 
 # Rappi Smart Suggestions
@@ -37,9 +37,16 @@ Help the user decide what to eat based on their personal taste profile and order
    - Time habits ("You mostly order at lunch")
    - Top topping preferences
 
-5. If the user picks a recommendation, transition into the ordering flow:
+5. Additional context available:
+   - `explore_verticals()` — show all available store types if they want to try something different
+   - `get_credits_balance()` — mention credits balance if relevant to budget
+   - `get_rappi_favorites()` — their favorited stores from the Rappi app
+   - `browse_stores(store_type)` — browse specific store types (Turbo, markets, pharmacies)
+
+6. If the user picks a recommendation, transition into the ordering flow:
    - Use `quick_reorder` for "usual" recommendations
    - Use `get_restaurant_menu` + `add_to_cart` for specific stores
+   - For Turbo/market stores, use `search_store_products(store_id, query)` + `add_to_cart(... product_name, product_price)`
    - Always confirm before checkout
 
-6. Prices in COP, formatted as $35.500.
+7. Prices in COP, formatted as $35.500.
