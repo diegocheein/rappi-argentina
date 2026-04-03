@@ -20,7 +20,7 @@ console = Console()
 def login(
     token: str | None = typer.Option(None, "--token", "-t", help="Manual Bearer token (skips browser login)"),
     device_id: str | None = typer.Option(None, "--device-id", "-d", help="Device ID (UUID). Auto-generated if omitted."),
-    country: str = typer.Option("co", "--country", "-c", help="Country code: co, mx, br, ar, cl, pe, ec, cr, uy"),
+    country: str = typer.Option("co", "--country", "-c", help="Country code: co (Colombia), mx (Mexico)"),
     headless: bool = typer.Option(False, "--headless", help="Run browser in headless mode"),
 ) -> None:
     """Log in to Rappi. Opens a browser for you to sign in (or pass --token for manual auth)."""

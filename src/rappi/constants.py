@@ -2,25 +2,23 @@
 
 import os
 
-BASE_URL = "https://services.grability.rappi.com"
 IMAGES_BASE_URL = "https://images.rappi.com"
 
-# Supported countries — domain used for login page, origin, and referer headers
-COUNTRY_DOMAINS = {
-    "co": "www.rappi.com.co",      # Colombia
-    "mx": "www.rappi.com.mx",      # Mexico
-    "br": "www.rappi.com.br",      # Brazil
-    "ar": "www.rappi.com.ar",      # Argentina
-    "cl": "www.rappi.cl",          # Chile
-    "pe": "www.rappi.pe",          # Peru
-    "ec": "www.rappi.com.ec",      # Ecuador
-    "cr": "www.rappi.co.cr",       # Costa Rica
-    "uy": "www.rappi.com.uy",      # Uruguay
+# Supported countries
+# - domain: login page, origin/referer headers
+# - api_prefix: base URL is services.{prefix}grability.rappi.com (CO has no prefix)
+COUNTRIES = {
+    "co": {"domain": "www.rappi.com.co", "api_prefix": "", "name": "Colombia"},
+    "mx": {"domain": "www.rappi.com.mx", "api_prefix": "mx", "name": "Mexico"},
 }
 
 # Country is set via RAPPI_COUNTRY env var or config — defaults to Colombia
 _country_code = os.environ.get("RAPPI_COUNTRY", "co").lower()
-RAPPI_DOMAIN = COUNTRY_DOMAINS.get(_country_code, COUNTRY_DOMAINS["co"])
+_country = COUNTRIES.get(_country_code, COUNTRIES["co"])
+
+RAPPI_DOMAIN = _country["domain"]
+_api_prefix = _country["api_prefix"]
+BASE_URL = f"https://services.{_api_prefix}grability.rappi.com" if _api_prefix else "https://services.grability.rappi.com"
 
 # Default coordinates (0,0 — auto-synced from active address at runtime)
 DEFAULT_LAT = 0.0

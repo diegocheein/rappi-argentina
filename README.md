@@ -4,7 +4,7 @@ A Claude plugin that lets you order food from [Rappi](https://www.rappi.com) thr
 
 Works on **Claude Code**, **Claude Desktop**, and **Claude Cowork** (web).
 
-Supports all Rappi countries: Colombia, Mexico, Brazil, Argentina, Chile, Peru, Ecuador, Costa Rica, and Uruguay.
+Supports **Colombia** and **Mexico** (more countries coming soon).
 
 ## How It Works
 
@@ -43,18 +43,11 @@ uv run playwright install chromium
 ### Authenticate
 
 ```bash
-# Opens a browser — log in with your phone + OTP
+# Colombia (default)
 uv run rappi auth login
 
-# For other countries (default is Colombia):
-uv run rappi auth login --country mx   # Mexico
-uv run rappi auth login --country br   # Brazil
-uv run rappi auth login --country ar   # Argentina
-uv run rappi auth login --country cl   # Chile
-uv run rappi auth login --country pe   # Peru
-uv run rappi auth login --country ec   # Ecuador
-uv run rappi auth login --country cr   # Costa Rica
-uv run rappi auth login --country uy   # Uruguay
+# Mexico
+uv run rappi auth login --country mx
 ```
 
 Your token is saved locally at `~/.rappi/config.json`. It never leaves your machine.
@@ -243,7 +236,7 @@ Or deploy manually:
 | `RAPPI_TOKEN` | `ft.xxxxx` | Auth token from `~/.rappi/config.json` |
 | `RAPPI_DEVICE_ID` | UUID | Device ID from config |
 | `MCP_TRANSPORT` | `sse` | Enables HTTP transport |
-| `RAPPI_COUNTRY` | `co` | Country code (co, mx, br, ar, cl, pe, ec, cr, uy) |
+| `RAPPI_COUNTRY` | `co` | Country code: `co` (Colombia) or `mx` (Mexico) |
 
 4. Railway auto-assigns a URL like `https://your-app.up.railway.app`
 5. Verify: `curl https://your-app.up.railway.app/health` should return `ok`
