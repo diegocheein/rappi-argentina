@@ -2,6 +2,8 @@
 
 A Claude plugin that lets you order food from Rappi through conversation. Say "order me a burger" and Claude handles the rest — searching restaurants, browsing menus, customizing toppings, managing your cart, and placing the order. It remembers your favorites, preferences, and order history across conversations.
 
+Works on **Claude Code**, **Claude Desktop**, and **Claude Cowork** (web).
+
 ## How It Works
 
 ```
@@ -14,10 +16,10 @@ Claude: *checks your order history, finds El Corral*
 
 You: "Looks good, place it"
 
-Claude: *places the order, tracks delivery*
+Claude: *places the order, tracks delivery with real-time ETA*
 ```
 
-The plugin gives Claude 25 tools to interact with Rappi, 4 skills for common workflows, a specialized ordering agent, and a local memory system that learns your preferences over time.
+The plugin gives Claude **38 tools** to interact with Rappi, **4 skills** for common workflows, a specialized ordering agent, and a local memory system that learns your preferences over time.
 
 ## Install
 
@@ -49,7 +51,8 @@ Your token is saved locally at `~/.rappi/config.json`. It never leaves your mach
 
 **Claude Code** (auto-discovers everything):
 ```bash
-claude --plugin-dir .
+cd rappi-claude-plugin
+claude   # MCP server auto-registers from .mcp.json
 ```
 
 **Claude Desktop** (add to `~/Library/Application Support/Claude/claude_desktop_config.json`):
@@ -64,6 +67,11 @@ claude --plugin-dir .
 }
 ```
 
+**Claude Cowork** (web — uses Railway deployment):
+1. Upload `rappi-cowork-plugin.zip` via Cowork > Customize > Plugins
+2. Add remote MCP connector: `https://rappi-claude-plugin-production.up.railway.app/sse`
+3. See [Deployment](#deployment) section for Railway setup
+
 ## What You Can Do
 
 ### Through Claude (Skills)
@@ -73,27 +81,27 @@ Just talk to Claude naturally. The plugin auto-triggers when you mention food, o
 | Skill | Trigger | What Claude Does |
 |-------|---------|-----------------|
 | `/order-food` | "Order me food", "I'm hungry", "get me a burger" | Full workflow: search → menu → toppings → cart → checkout → track |
-| `/rappi-search` | "What restaurants are nearby?", "find pizza" | Searches stores and products, shows results |
+| `/rappi-search` | "What restaurants are nearby?", "find beer at Turbo" | Searches stores and products, shows results |
 | `/rappi-reorder` | "Order the same as last time", "reorder" | Pulls from order history, re-adds items to cart |
-| `/rappi-suggest` | "What should I eat?", "suggest something" | Analyzes your taste profile, suggests based on habits, time, and history |
+| `/rappi-suggest` | "What should I eat?", "suggest something" | Analyzes taste profile, suggests based on habits, time, and history |
 
 ### Through Claude (Conversational)
 
-Beyond the skills, Claude can use the 25 MCP tools in any combination:
+Beyond the skills, Claude can use the 38 MCP tools in any combination:
 
-- "What should I eat?" — analyzes your taste profile, gives personalized suggestions
-- "What do I usually order?" — shows your computed taste profile with categories, spending, time patterns
-- "What did I order last week?" — checks order history
-- "Which items on this menu would I like?" — scores menu items against your taste
+- "What's available on Rappi?" — shows all verticals (Restaurants, Turbo, Markets, Farmacia, Licores)
+- "Find me beer at Exito" — searches specific store types with products
+- "Browse the Turbo store aisles" — shows store categories
+- "What should I eat?" — analyzes taste profile, gives personalized suggestions
+- "What did I order last week?" — checks order history with cost breakdown
+- "How much Rappi credit do I have?" — shows wallet balance
+- "Track my order" — real-time delivery state, ETA, driver position
+- "What were the fees on my last order?" — detailed cost breakdown
 - "Save El Corral as a favorite" — adds to favorites
-- "I'm allergic to peanuts" — saves to preferences, filters future recommendations
+- "I'm allergic to peanuts" — saves to preferences
 - "Always tip $5,000" — saves default tip
-- "What's in my cart?" — shows cart contents
-- "Track my order" — shows delivery status and ETA
 
 ### Through the Terminal (CLI)
-
-The plugin also includes a full CLI for direct terminal use:
 
 ```bash
 uv run rappi go                    # Interactive guided ordering
@@ -128,88 +136,119 @@ uv run rappi prefs                 # Your preferences
 | `rappi order list` | View active and past orders |
 | `rappi order track` | Live order tracking |
 | `rappi history` | View order history from memory |
-| `rappi history detail <id>` | View order details |
-| `rappi history stores` | Most-ordered-from stores |
 | `rappi favorites` | List favorite stores |
-| `rappi favorites add <id>` | Save a favorite |
-| `rappi favorites remove <id>` | Remove a favorite |
 | `rappi prefs` | View preferences |
 | `rappi prefs set tip 5000` | Set default tip |
-| `rappi prefs set diet vegetarian` | Set dietary restrictions |
-| `rappi prefs set allergy "peanuts"` | Set allergies |
 
 </details>
 
+## MCP Tools Reference
+
+<details>
+<summary>All 38 tools</summary>
+
+**Discovery & Browsing**
+- `explore_verticals` — all available store types in area (Restaurants, Turbo, Markets, Farmacia, Licores)
+- `search_restaurants(query)` — search products/stores by keyword (all store types)
+- `browse_restaurants(offset, limit)` — nearby restaurants
+- `browse_stores(store_type, query)` — find stores by type (turbo, exito, carulla, olimpica, etc.)
+- `get_store_categories(store_id)` — browse store aisles/categories
+- `get_aisle_products(store_id, aisle_id)` — products in a category
+- `get_store_info(store_id)` — hours, charges, address
+- `search_store_products(store_id, query)` — CPG product search with brand info
+- `search_in_store(store_id, query)` — search within any store
+
+**Menu & Products**
+- `get_restaurant_menu(store_id)` — full menu by category
+- `get_product_toppings(store_id, product_id)` — customization options
+
+**Cart & Checkout**
+- `add_to_cart(store_id, product_id, quantity, topping_ids, product_name, product_price)` — add item
+- `view_cart` / `remove_from_cart(store_id, product_id)`
+- `checkout(tip_amount, confirm)` — preview then place (auto-detects store_type)
+- `get_payment_methods` — available payment methods and cards
+
+**Order Tracking**
+- `get_active_orders` — currently active orders
+- `track_order(order_id)` — real-time state, ETA, driver position
+- `get_order_detail(order_id)` — full order summary
+- `get_order_breakdown(order_id)` — detailed costs, fees, discounts
+- `get_order_status` — active and cancelled orders
+- `get_order_history(limit)` — past orders with items
+
+**Account**
+- `get_ordering_context` — full state snapshot (user, address, cart, memory)
+- `auth_status` — profile and Prime status
+- `list_delivery_addresses` / `set_delivery_address(address_id)`
+- `get_credits_balance` — Rappi credits/wallet balance
+- `get_rappi_favorites` — favorite stores from Rappi
+- `get_favorites` / `add_favorite` / `remove_favorite` — local favorites
+
+**Intelligence & Memory**
+- `get_taste_profile` — computed taste profile (categories, time patterns, spending)
+- `get_recommendations(context?)` — smart suggestions based on habits
+- `score_menu(store_id)` — rank menu items by taste match
+- `quick_reorder(order_id)` — re-add past order to cart
+- `get_preferences` / `set_preference(key, value)`
+- `smart_search(query)` — semantic search across cached products
+
+</details>
+
+## Store Types
+
+The plugin works with all Rappi store types. Cart, checkout, and order tracking automatically detect the correct store type.
+
+| Type | Examples | How It Works |
+|------|----------|-------------|
+| Restaurants | El Corral, McDonald's, local places | Browse menu categories, customize toppings |
+| Turbo | Turbo convenience stores | Search for products, browse by aisle |
+| Markets | Carulla, Exito, Jumbo, Olimpica | Search for products |
+| Pharmacies | La Rebaja, Farmatodo | Search for products |
+| Liquor | Cervesia, Exito Licores | Search for products |
+
+## Deployment
+
+The MCP server supports two modes:
+
+- **Local (stdio)**: For Claude Code and Claude Desktop — runs as a subprocess
+- **Remote (SSE over HTTP)**: For Claude Cowork — deployed to Railway
+
+### Railway Deployment
+
+The repo auto-deploys to Railway on every push. The server runs as an SSE endpoint.
+
+**Environment variables** (set in Railway dashboard):
+
+| Variable | Value | Purpose |
+|----------|-------|---------|
+| `RAPPI_TOKEN` | `ft.xxxxx` | Auth token from `~/.rappi/config.json` |
+| `RAPPI_DEVICE_ID` | UUID | Device ID from config |
+| `MCP_TRANSPORT` | `sse` | Enables HTTP transport |
+
+Coordinates are auto-synced from your Rappi active address — no need to set lat/lng.
+
+**Cowork plugin**: Upload `rappi-cowork-plugin.zip` to Cowork, add the Railway URL as a remote MCP connector.
+
+See [CLAUDE.md](CLAUDE.md) for the full deployment reference including the critical FastMCP patterns.
+
 ## Intelligence & Personalization
 
-The plugin stores everything locally in a SQLite database (`~/.rappi/rappi.db`) and computes a **taste profile** from your order history. Nothing is sent to external services (unless you enable optional OpenAI embeddings).
+The plugin stores everything locally in SQLite (`~/.rappi/rappi.db`) and computes a **taste profile** from your order history.
 
 ### What It Learns
 
 | Data | Source | What It Computes |
 |------|--------|-----------------|
-| **Order history** | Auto-recorded after checkout | "The usual" per store, reorder patterns |
-| **Product cache** | Auto-cached from menus/searches | Category preferences (Hamburguesas 40%, Bebidas 25%) |
-| **Time patterns** | Extracted from order timestamps | Peak ordering times (lunch, evening), day-of-week habits |
-| **Topping choices** | Stored with each order item | "Always adds extra cheese", "never onions" |
-| **Price patterns** | Computed from order totals | Average spend, budget alerts, price sensitivity |
-| **Search history** | Auto-recorded on every search | Query suggestions, intent signals |
-| **Preferences** | You tell Claude or set via CLI | Dietary restrictions, allergies, default tip |
-| **Favorites** | You mark stores | Quick access, prioritized recommendations |
+| Order history | Auto-recorded after checkout | "The usual" per store, reorder patterns |
+| Product cache | Auto-cached from menus/searches | Category preferences (Hamburguesas 40%, Bebidas 25%) |
+| Time patterns | Order timestamps | Peak ordering times, day-of-week habits |
+| Topping choices | Stored per order item | "Always adds extra cheese" |
+| Price patterns | Order totals | Average spend, price sensitivity |
+| Preferences | You tell Claude or set via CLI | Dietary restrictions, allergies, default tip |
 
-### Taste Profile
+### Embeddings (Optional)
 
-The plugin computes a full taste profile on demand from your history:
-
-```
-Category preferences: Hamburguesas 40%, Bebidas 25%, Acompañamientos 20%...
-Store type: 70% restaurants, 30% Turbo
-Price range: avg $35,500 per order, avg $12,000 per item
-Time patterns: peak at lunch, mostly on weekdays
-Top stores: El Corral (12 orders), Turbo (8 orders)
-Spending: $450,000 total, 4.2 orders/week, avg tip $3,000
-```
-
-### How Embeddings Enhance This
-
-Without embeddings, recommendations use SQL — exact history matches and frequency counts. With embeddings enabled, the system understands *meaning*:
-
-| Feature | Without Embeddings (SQL) | With Embeddings |
-|---------|-------------------------|----------------|
-| "The usual" | Exact product match (ordered 3+ times) | Same |
-| Time suggestions | Stores ordered from at this hour | Same |
-| **Product similarity** | Not available | "You liked Hamburguesa BBQ → try Burger Texana" |
-| **Menu scoring** | Ordered-before frequency | Each item scored by cosine similarity to taste vector |
-| **Smart search** | Keyword LIKE match | "Something refreshing" → finds Sprite, Limonada |
-| **New discoveries** | Random unvisited stores | Stores with menus most similar to your taste |
-
-The taste vector is the average of all your ordered products' embeddings — a numerical fingerprint of your food preferences. When browsing a new restaurant, every menu item is scored against this vector.
-
-### What Makes This Different
-
-No food delivery app does this today:
-- Computes a taste profile from your entire order history
-- Detects "the usual" per store and offers to reorder
-- Understands topping preferences per product
-- Gives time-aware suggestions ("you usually order from here around noon")
-- Scores menu items by how well they match your taste (with embeddings)
-- Finds similar products across different restaurants
-- Respects dietary restrictions and allergies across every recommendation
-- Tracks spending patterns and alerts on unusual orders
-
-The combination of **AI reasoning** (Claude) + **personal memory** (SQLite) + **real ordering** (Rappi API) creates something that doesn't exist: a food assistant that actually knows you.
-
-### Reset Memory
-
-```bash
-rm ~/.rappi/rappi.db      # Delete history, preferences, cache
-uv run rappi auth logout   # Delete auth token
-rm -rf ~/.rappi/           # Delete everything
-```
-
-## Embeddings (Optional)
-
-By default, product search uses keyword matching. Enable OpenAI embeddings for semantic search — "something refreshing" matches "Sprite" and "Limonada" even though the words don't overlap.
+Enable OpenAI embeddings for semantic search — "something refreshing" matches "Sprite" and "Limonada".
 
 ```bash
 uv add openai
@@ -217,120 +256,16 @@ export OPENAI_API_KEY="sk-..."
 uv run rappi prefs set embeddings.enabled true
 ```
 
-Cost is effectively zero (~$0.001 per 1,000 products). The embedding provider is abstracted — swap OpenAI for a local model (Ollama) by implementing the `EmbeddingProvider` interface.
-
-## Plugin Architecture
-
-```
-rappi-claude-plugin/
-│
-├── .claude-plugin/plugin.json   # Plugin manifest
-├── .mcp.json                    # MCP server auto-config
-├── .claude/settings.json        # Session hooks
-│
-├── skills/                      # What Claude can do
-│   ├── order-food/SKILL.md      # Full ordering workflow
-│   ├── rappi-search/SKILL.md    # Quick search
-│   └── rappi-reorder/SKILL.md   # Reorder from history
-│
-├── agents/
-│   └── rappi-agent.md           # Specialized ordering agent (Sonnet)
-│
-├── src/rappi/                   # Plugin engine
-│   ├── mcp/server.py            # 22 MCP tools (what Claude calls)
-│   ├── services/                # Business logic (shared by all interfaces)
-│   ├── memory/                  # SQLite persistence + optional embeddings
-│   ├── cli/                     # Terminal interface
-│   ├── models/                  # Pydantic data models
-│   └── client.py                # Rappi API client
-│
-└── pyproject.toml               # Dependencies & entry points
-```
-
-**How the pieces connect:**
-
-```
-Skills & Agent (what Claude follows)
-        |
-        v
-MCP Tools (what Claude calls)        CLI (terminal alternative)
-        |                                    |
-        +-------- Services Layer ------------+
-                      |
-              +-------+-------+
-              |               |
-        Rappi API        Memory (SQLite)
-        (internet)       (~/.rappi/rappi.db)
-```
-
-Skills tell Claude the workflow. MCP tools give Claude the capabilities. Services contain the business logic. Memory makes it personal. The CLI provides a direct terminal interface to the same engine.
-
-## MCP Tools Reference
-
-<details>
-<summary>All 25 tools</summary>
-
-**Context**
-- `get_ordering_context` — full state snapshot: user, address, cart, orders, memory
-- `auth_status` — check token validity
-
-**Addresses**
-- `list_delivery_addresses` / `set_delivery_address`
-
-**Search & Browse**
-- `search_restaurants(query)` — all store types (restaurants, Turbo, markets, pharmacies)
-- `search_in_store(store_id, query)` — products within a specific store
-- `browse_restaurants(offset, limit)` — nearby restaurants
-
-**Menu**
-- `get_restaurant_menu(store_id)` — full menu by category
-- `get_product_toppings(store_id, product_id)` — customization options
-
-**Cart**
-- `add_to_cart(store_id, product_id, quantity, topping_ids)`
-- `view_cart` / `remove_from_cart(store_id, product_id)`
-
-**Checkout**
-- `checkout(tip_amount, confirm)` — preview then place
-- `get_order_status` — active order tracking
-
-**Memory**
-- `get_order_history(limit)` — past orders with items
-- `get_favorites` / `add_favorite` / `remove_favorite`
-- `quick_reorder(order_id)` — re-add past order to cart
-- `get_preferences` / `set_preference(key, value)`
-- `smart_search(query)` — semantic search across memory
-
-**Intelligence**
-- `get_taste_profile` — computed taste profile (categories, time patterns, spending, top items)
-- `get_recommendations(context?)` — smart suggestions based on habits and time of day
-- `score_menu(store_id)` — rank menu items by how well they match user's taste
-
-</details>
-
-## Store Types
-
-The plugin works with all Rappi store types:
-
-| Type | Examples | How It Works |
-|------|----------|-------------|
-| Restaurants | El Corral, McDonald's, local places | Browse menu categories, customize toppings |
-| Turbo | Turbo convenience stores | Search for products (no static menu) |
-| Markets | Carulla, Exito | Search for products |
-| Pharmacies | La Rebaja, Farmatodo | Search for products |
-
-## API Notes
-
-This plugin uses Rappi's internal API — the same endpoints the Rappi website calls. There is no public API documentation. Tokens expire periodically — re-run `rappi auth login` when needed.
-
 ## Development
 
 ```bash
 uv sync --group dev            # Install dev dependencies
 uv run rappi --help            # Test CLI
-uv run pytest                  # Run tests
-npx @modelcontextprotocol/inspector uv run rappi-mcp  # Test MCP
+uv run pytest                  # Run tests (196 tests)
+npx @modelcontextprotocol/inspector uv run rappi-mcp  # Test MCP in browser
 ```
+
+See [CLAUDE.md](CLAUDE.md) for the developer reference, [API_ENDPOINTS.md](API_ENDPOINTS.md) for the full Rappi API map, and [TESTING.md](TESTING.md) for the manual testing checklist.
 
 ## License
 

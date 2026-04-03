@@ -11,9 +11,11 @@ The plugin consists of: **skills** (what Claude follows), **MCP tools** (what Cl
 ```bash
 uv sync                           # Install dependencies
 uv run rappi auth login           # Authenticate (opens browser)
-claude --plugin-dir .             # Load plugin in Claude Code
+claude                            # Claude Code (auto-discovers plugin from .mcp.json)
 uv run rappi go                   # Terminal ordering (alternative)
-uv run rappi-mcp                  # Start MCP server standalone
+uv run rappi-mcp                  # Start MCP server standalone (stdio)
+MCP_TRANSPORT=sse uv run rappi-mcp  # Start MCP server as HTTP (for Railway)
+uv run pytest tests/ -q           # Run 196 automated tests
 ```
 
 ## Plugin Structure
@@ -21,7 +23,7 @@ uv run rappi-mcp                  # Start MCP server standalone
 ```
 rappi-claude-plugin/
 ├── .claude-plugin/plugin.json   # Plugin manifest (required)
-├── .mcp.json                    # Auto-registers MCP server
+├── .mcp.json                    # Auto-registers MCP server (stdio, local)
 ├── .claude/settings.json        # SessionStart auth check hook
 │
 ├── skills/                      # Claude skills (slash commands)
@@ -33,32 +35,50 @@ rappi-claude-plugin/
 ├── agents/
 │   └── rappi-agent.md           # Specialized ordering agent (Sonnet)
 │
-└── src/rappi/                   # Plugin engine
-    ├── mcp/server.py            # 38 MCP tools
-    ├── services/                # Shared business logic
-    ├── memory/                  # SQLite + optional embeddings + intelligence engine
-    ├── cli/                     # Terminal interface
-    ├── models/                  # Pydantic data models
-    └── client.py                # Rappi API client
+├── src/rappi/                   # Plugin engine
+│   ├── mcp/server.py            # 38 MCP tools (stdio + SSE transport)
+│   ├── services/                # Shared business logic
+│   │   ├── auth.py              # Authentication, profile
+│   │   ├── address.py           # Delivery addresses
+│   │   ├── search.py            # Unified search + CPG product search
+│   │   ├── store.py             # Store detail, menu, toppings, catalog
+│   │   ├── cart.py              # Cart CRUD (compound IDs, 3 prices)
+│   │   ├── checkout.py          # Checkout, tip, payment, place order
+│   │   ├── order.py             # Order tracking, resume, cost breakdown
+│   │   ├── home.py              # Homepage verticals discovery
+│   │   ├── dynamic.py           # Store aisles/categories (dynamic content)
+│   │   └── account.py           # Favorites API, credits, active orders
+│   ├── memory/                  # SQLite + optional embeddings + intelligence engine
+│   ├── cli/                     # Terminal interface
+│   ├── models/                  # Pydantic data models
+│   ├── constants.py             # ALL API endpoints, headers, app versions
+│   └── client.py                # Rappi API client
+│
+├── Dockerfile                   # Railway deployment (Python 3.12 + uv)
+├── railway.json                 # Railway config (healthcheck at /health)
+├── API_ENDPOINTS.md             # Full Rappi API reference (from browser capture)
+└── tests/                       # 196 automated tests
 ```
 
 ## How the Pieces Connect
 
 ```
-Skills & Agent          (what Claude follows — workflow instructions)
-      |
-      v
-MCP Tools (25)          (what Claude calls — structured JSON in/out)
-      |
-      +------ Services Layer ------+---- CLI (terminal alternative)
-                  |
-          +-------+-------+
-          |               |
-    Rappi API        Memory (SQLite)
-    (internet)       (~/.rappi/rappi.db)
+Claude Code / Desktop (local)     Claude Cowork (web)
+        |                                |
+    stdio transport               SSE over HTTP (Railway)
+        |                                |
+        +---------- MCP Server ----------+
+                  38 tools
+                      |
+        +------ Services Layer ------+---- CLI (terminal alternative)
+                      |
+              +-------+-------+
+              |               |
+        Rappi API        Memory (SQLite)
+        (internet)       (~/.rappi/rappi.db)
 ```
 
-**Skills** tell Claude the workflow. **MCP tools** give Claude capabilities. **Services** contain business logic (shared by MCP and CLI). **Memory** makes it personal.
+**Skills** tell Claude the workflow. **MCP tools** give Claude capabilities. **Services** contain business logic (shared by MCP and CLI). **Memory** makes it personal. The server runs locally (stdio) or on Railway (SSE) — same code, different transport.
 
 ## Key Files
 
@@ -89,9 +109,10 @@ Skills are markdown files with YAML frontmatter. Claude auto-invokes them based 
 
 | Skill | Trigger | Allowed Tools |
 |-------|---------|---------------|
-| `/order-food` | Food ordering, "I'm hungry", mentions Rappi | All 22 MCP tools + Bash |
-| `/rappi-search` | "Find restaurants", "search for pizza" | Search + menu tools |
-| `/rappi-reorder` | "Order the same", "reorder" | History + cart + checkout tools |
+| `/order-food` | Food ordering, "I'm hungry", mentions Rappi | All 38 MCP tools |
+| `/rappi-search` | "Find restaurants", "search for pizza", "find Turbo stores" | All 38 MCP tools |
+| `/rappi-reorder` | "Order the same", "reorder" | All 38 MCP tools |
+| `/rappi-suggest` | "What should I eat?", "suggest something" | All 38 MCP tools |
 
 ### Adding a New Skill
 
@@ -191,25 +212,30 @@ SQLite at `~/.rappi/rappi.db`. All writes best-effort — never blocks ordering.
 ## Testing
 
 ```bash
-# Plugin loads
-uv run rappi --help
+# All 196 automated tests
+uv run pytest tests/ -q
 
-# MCP tools
-uv run python -c "from rappi.mcp.server import mcp; print([t.name for t in mcp._tool_manager._tools.values()])"
+# Verify tool count (should be 38)
+uv run python -c "from rappi.mcp.server import mcp; print(f'{len(mcp._tool_manager._tools)} tools')"
 
-# Memory
+# Test a tool against live API
 uv run python -c "
 import asyncio
-from rappi.memory import MemoryManager
-async def t():
-    async with MemoryManager() as m:
-        print(await m.get_memory_summary())
-asyncio.run(t())
+from rappi.mcp.server import explore_verticals
+r = asyncio.run(explore_verticals())
+for v in r['verticals'][:5]: print(f'  {v[\"id\"]}: {v[\"name\"]}')
 "
 
-# MCP inspector
+# MCP inspector (browser UI)
 npx @modelcontextprotocol/inspector uv run rappi-mcp
+
+# CLI smoke test
+uv run rappi auth status
+uv run rappi search "pizza"
+uv run rappi store browse
 ```
+
+See [TESTING.md](TESTING.md) for the full 22-section manual testing checklist.
 
 ## Remote Deployment (Railway + Cowork)
 
