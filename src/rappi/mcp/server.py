@@ -122,12 +122,13 @@ Call `add_to_cart(store_id, product_id, quantity, topping_ids)`.
 - Ask if user wants to add more items
 
 ## Step 6: Checkout
-1. Call `checkout(tip_amount=0, confirm=false)` — PREVIEW ONLY
-2. Show the summary to the user (products, delivery fee, total)
-3. Check preferences for default tip: `get_preferences()`
-4. Ask user to confirm
-5. ONLY after explicit confirmation: `checkout(tip_amount=X, confirm=true)`
-6. NEVER place an order without user saying yes
+1. Set the tip first: `set_tip(tip_amount)` — persists on Rappi's server
+2. Call `checkout(confirm=false)` — PREVIEW ONLY
+3. Show the summary to the user (products, delivery fee, tip, total)
+4. Check preferences for default tip: `get_preferences()`
+5. Ask user to confirm
+6. ONLY after explicit confirmation: `checkout(confirm=true)`
+7. NEVER place an order without user saying yes
 
 ## Step 7: Track
 After placing: `get_order_status()` shows delivery state and ETA.
@@ -207,6 +208,204 @@ Key differences:
 - Non-restaurant stores have thousands of SKUs, only searchable — no browse menu
 - Store type appears in search results as `store_type` field
 - The store type determines which URL path the cart/checkout API uses
+"""
+
+
+# --- Skill resources (auto-discovered by OpenClaw and other MCP clients) ---
+
+
+@mcp.resource("rappi://skill/order-food")
+async def skill_order_food() -> str:
+    """Full ordering workflow — search, browse, cart, checkout, track. Use when the user wants to order food or anything from Rappi."""
+    return """# Rappi Food Ordering
+
+You are helping the user order from Rappi. All prices are in COP (Colombian Pesos), formatted with dot separators (e.g., $35.500).
+
+## Available Tools (39 total)
+
+### Discovery
+- `explore_verticals()` — see all available store types (Restaurants, Turbo, Markets, Farmacia, Licores)
+- `browse_restaurants(offset, limit)` — nearby restaurants
+- `browse_stores(store_type, query)` — find stores by type (turbo, exito, carulla, olimpica, farmatodo)
+- `search_restaurants(query)` — search all store types by keyword
+
+### Store Browsing
+- `get_restaurant_menu(store_id)` — full menu for restaurants
+- `search_store_products(store_id, query)` — CPG product search (Turbo/markets — richer results)
+- `search_in_store(store_id, query)` — search within any store
+- `get_store_info(store_id)` — hours, charges, address
+- `get_store_categories(store_id)` — browse aisles/categories
+- `get_aisle_products(store_id, aisle_id)` — products in a category
+
+### Cart & Checkout
+- `add_to_cart(store_id, product_id, quantity, topping_ids, product_name, product_price)` — add item (pass name/price for Turbo/market stores)
+- `view_cart()` — current cart
+- `remove_from_cart(store_id, product_id)` — remove item
+- `get_product_toppings(store_id, product_id)` — customization options
+- `set_tip(tip_amount)` — set delivery tip (persists on server until order placed)
+- `checkout(confirm)` — preview (confirm=false) or place (confirm=true)
+- `get_payment_methods()` — available payment methods
+
+### Order Tracking
+- `get_active_orders()` — currently active orders
+- `track_order(order_id)` — real-time state, ETA, driver position
+- `get_order_detail(order_id)` — full order summary
+- `get_order_breakdown(order_id)` — detailed cost breakdown
+- `get_order_history(limit)` — past orders
+
+### Account & Preferences
+- `get_ordering_context()` — full state snapshot
+- `get_credits_balance()` — Rappi credits/wallet
+- `get_rappi_favorites()` — favorite stores
+- `get_taste_profile()` — computed taste profile
+- `get_recommendations()` — smart suggestions
+- `get_preferences()` / `set_preference(key, value)` — dietary restrictions, default tip
+
+## Workflow
+
+### Step 1: Check Context
+Call `get_ordering_context` FIRST to understand current state.
+
+### Step 2: Find What They Want
+- **See what's available**: `explore_verticals`
+- **Specific food**: `search_restaurants(query)`
+- **Browse restaurants**: `browse_restaurants`
+- **Reorder**: `get_order_history` then `quick_reorder(order_id)`
+- **Specific store type** (Turbo, Exito, etc.): `browse_stores(store_type, query)`
+
+### Step 3: Show Menu / Products
+- **Restaurants**: `get_restaurant_menu(store_id)`
+- **Turbo/Markets**: `search_store_products(store_id, query)`
+- **Any store**: `search_in_store(store_id, query)` as fallback
+
+### Step 4: Handle Toppings
+If `has_toppings=true`: call `get_product_toppings` BEFORE adding to cart. Categories with `min_required > 0` are MANDATORY.
+
+### Step 5: Add to Cart
+- **Restaurants**: `add_to_cart(store_id, product_id, quantity, topping_ids)`
+- **Turbo/markets**: `add_to_cart(store_id, product_id, quantity, product_name="...", product_price=...)`
+
+### Step 6: Checkout
+1. Set tip: `set_tip(tip_amount)` — check preferences for default
+2. Preview: `checkout(confirm=false)`
+3. Show breakdown to user
+4. ONLY after explicit confirmation: `checkout(confirm=true)`
+
+### Step 7: Track
+Call `track_order(order_id)` for real-time ETA and state.
+
+## Error Handling
+- "Token expired" → tell user to run `rappi auth login`
+- "Store unavailable" → suggest alternatives
+- "Missing required toppings" → go back and ask
+- "Product not found" (Turbo/markets) → pass product_name and product_price
+"""
+
+
+@mcp.resource("rappi://skill/search")
+async def skill_search() -> str:
+    """Quick search for restaurants, stores, or products on Rappi."""
+    return """# Rappi Quick Search
+
+Search for restaurants, stores, and products on Rappi. Lightweight search — no cart or checkout.
+
+## Steps
+
+1. Determine the search type:
+   - **"What's available?"** → `explore_verticals` (all store types)
+   - **Product search** (e.g., "pizza", "cerveza") → `search_restaurants(query)` (returns ALL store types)
+   - **Store type browsing** (e.g., "Turbo stores", "Exito") → `browse_stores(store_type, query)`
+   - **Restaurant browsing** → `browse_restaurants`
+   - **Search within a store** → `search_store_products(store_id, query)` for CPG stores, or `search_in_store(store_id, query)`
+
+2. Present results in a table: store name, type, ETA, delivery cost, matching products with prices.
+
+3. For more products from a store:
+   - Restaurants: `get_restaurant_menu(store_id)`
+   - Turbo/markets: `search_store_products(store_id, query)` (richer results with brand info)
+   - Hours/fees: `get_store_info(store_id)`
+
+4. Additional info: `get_credits_balance()`, `get_rappi_favorites()`, `get_order_detail(order_id)`, `get_order_breakdown(order_id)`
+
+5. Prices in COP — format as $35.500 with dot separators.
+
+6. If user wants to order, guide them through the ordering flow.
+"""
+
+
+@mcp.resource("rappi://skill/reorder")
+async def skill_reorder() -> str:
+    """Reorder from Rappi order history."""
+    return """# Rappi Quick Reorder
+
+Help the user reorder from their order history.
+
+## Steps
+
+1. Call `get_order_history(limit=10)` to fetch recent orders.
+
+2. Present past orders: store name, items, total price, date.
+
+3. For order details: `get_order_detail(order_id)` or `get_order_breakdown(order_id)`.
+
+4. Call `quick_reorder(order_id)` with the selected order — re-adds available items to cart.
+
+5. Call `view_cart` to show what was added.
+
+6. If some items failed, ask about replacements.
+
+7. Set tip: `set_tip(tip_amount)` — check preferences for default.
+
+8. Preview: `checkout(confirm=false)`. Mention `get_credits_balance()` if relevant.
+
+9. After user confirms: `checkout(confirm=true)`. NEVER place without confirmation.
+
+10. Offer to track with `track_order(order_id)`.
+
+Prices in COP — format as $35.500.
+"""
+
+
+@mcp.resource("rappi://skill/suggest")
+async def skill_suggest() -> str:
+    """Smart food suggestions based on taste profile and ordering habits."""
+    return """# Rappi Smart Suggestions
+
+Help the user decide what to eat based on their taste profile.
+
+## Steps
+
+1. Call `get_recommendations(context)` with any user context (e.g., "lunch", "something cheap").
+
+2. Present recommendations by type:
+
+   **Your Usual** (type="usual"):
+   - "You order [items] from [store] regularly — want the usual?"
+   - Action: `quick_reorder` or `add_to_cart` for each item
+
+   **Right Now** (type="time_based"):
+   - "You usually order from [store] around this time"
+   - Action: browse their menu with `get_restaurant_menu`
+
+   **Try Something New** (type="new_store"):
+   - "You haven't tried [store] yet"
+   - Action: `search_restaurants` or `get_restaurant_menu`
+
+3. For deeper insight: `get_taste_profile` shows categories, favorites, spending, time habits.
+
+4. Additional context:
+   - `explore_verticals()` — all store types
+   - `get_credits_balance()` — budget awareness
+   - `get_rappi_favorites()` — favorited stores
+   - `browse_stores(store_type)` — specific store types
+
+5. When user picks a recommendation, transition to ordering:
+   - `quick_reorder` for "usual" picks
+   - `get_restaurant_menu` + `add_to_cart` for restaurants
+   - `search_store_products` + `add_to_cart(... product_name, product_price)` for Turbo/markets
+   - Always set tip and confirm before checkout
+
+Prices in COP — format as $35.500.
 """
 
 
