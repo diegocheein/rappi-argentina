@@ -15,6 +15,10 @@ USER_AGENT = (
 
 APP_VERSION = "e1de6be43aa29091011474615d7ac0810051c36a"
 
+# Different parts of the Rappi web app use different x-application-id values
+WEB_VERSION = "web_v1.154.3"
+CHECKOUT_VERSION = "v1.80.0"
+
 
 def build_headers(token: str, device_id: str) -> dict[str, str]:
     """Build the full header set required by every Rappi API request."""
@@ -38,6 +42,24 @@ def build_headers(token: str, device_id: str) -> dict[str, str]:
         "sec-fetch-site": "cross-site",
     }
     return headers
+
+
+# Context-specific header overrides for endpoints that need different app IDs
+HEADERS_BROWSE = {
+    "x-application-id": WEB_VERSION,
+    "app-version": WEB_VERSION,
+    "include_context_info": "true",
+    "language": "es",
+}
+
+HEADERS_CHECKOUT = {
+    "x-application-id": f"rappi-checkout-web/{CHECKOUT_VERSION}",
+    "app-version": CHECKOUT_VERSION,
+}
+
+HEADERS_FAVORITES = {
+    "content-type": "application/json; charset=UTF-8",
+}
 
 
 # --- Endpoint paths ---

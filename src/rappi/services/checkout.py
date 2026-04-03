@@ -1,7 +1,7 @@
 """Checkout and payment services."""
 
 from rappi.client import RappiClient
-from rappi.constants import Endpoints
+from rappi.constants import Endpoints, HEADERS_CHECKOUT
 from rappi.models.order import CheckoutDetail
 
 
@@ -41,6 +41,10 @@ async def place_order(
 async def get_payment_methods(client: RappiClient) -> dict:
     """Get available payment methods and saved cards."""
     try:
-        return await client.get(Endpoints.DEFAULT_PAYMENT_METHOD)
+        return await client.get(
+            Endpoints.DEFAULT_PAYMENT_METHOD,
+            params={"origin": "DEBT", "store_type": ""},
+            headers=HEADERS_CHECKOUT,
+        )
     except Exception:
-        return {"error": "Could not fetch payment methods. This endpoint may require an active cart."}
+        return {"error": "Could not fetch payment methods."}

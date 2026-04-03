@@ -1,7 +1,7 @@
 """Account services — favorites from API, credits, active orders."""
 
 from rappi.client import RappiClient
-from rappi.constants import Endpoints
+from rappi.constants import Endpoints, HEADERS_FAVORITES
 
 
 async def get_favorite_stores_api(client: RappiClient) -> list[dict]:
@@ -9,7 +9,8 @@ async def get_favorite_stores_api(client: RappiClient) -> list[dict]:
     try:
         data = await client.post(
             Endpoints.FAVORITE_STORES_API,
-            json={"lat": client.config.lat, "lng": client.config.lng},
+            json={"favorite_stores_type": "global", "lat": client.config.lat, "lng": client.config.lng},
+            headers=HEADERS_FAVORITES,
         )
         if isinstance(data, list):
             return data

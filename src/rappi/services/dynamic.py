@@ -4,7 +4,7 @@ All calls go to a single endpoint with different `context` values.
 """
 
 from rappi.client import RappiClient
-from rappi.constants import Endpoints
+from rappi.constants import Endpoints, HEADERS_BROWSE
 
 
 async def _fetch_dynamic_content(
@@ -27,14 +27,26 @@ async def _fetch_dynamic_content(
             **str_state,
         },
     }
-    return await client.post(Endpoints.DYNAMIC_CONTENT, json=payload)
+    return await client.post(Endpoints.DYNAMIC_CONTENT, json=payload, headers=HEADERS_BROWSE)
 
 
 def _extract_components(data: dict) -> list[dict]:
     """Extract the components array from the dynamic content response."""
     if isinstance(data, list):
         return data
-    return data.get("components", data.get("data", data.get("content", [])))
+    # Response is {data: {components: [...], context_info: {...}}}
+    inner = data.get("data", data)
+    if isinstance(inner, dict):
+        return inner.get("components", inner.get("content", []))
+    return []
+
+
+def _extract_context_info(data: dict) -> dict:
+    """Extract context_info (store availability, etc.) from the response."""
+    inner = data.get("data", data)
+    if isinstance(inner, dict):
+        return inner.get("context_info", {})
+    return {}
 
 
 async def get_store_aisles(
@@ -61,7 +73,15 @@ async def get_store_aisles(
         resource = comp.get("resource", {})
         if isinstance(resource, dict) and "aisles" in resource:
             aisles.extend(resource["aisles"])
-    # If we didn't find structured aisles, return all components for inspection
+    # If no aisles found, include context info (store may be closed)
+    if not aisles and not components:
+        ctx = _extract_context_info(data)
+        store = ctx.get("store", {})
+        return [{"_store_status": {
+            "is_available": store.get("is_available"),
+            "eta": store.get("eta_value"),
+            "hint": "Store may be closed — aisles only load when the store is active.",
+        }}]
     return aisles if aisles else components
 
 
