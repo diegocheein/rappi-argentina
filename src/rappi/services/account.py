@@ -6,13 +6,17 @@ from rappi.constants import Endpoints
 
 async def get_favorite_stores_api(client: RappiClient) -> list[dict]:
     """Get favorite stores from Rappi's API (richer than local memory)."""
-    data = await client.post(
-        Endpoints.FAVORITE_STORES_API,
-        json={"lat": client.config.lat, "lng": client.config.lng},
-    )
-    if isinstance(data, list):
-        return data
-    return data.get("stores", data.get("data", []))
+    try:
+        data = await client.post(
+            Endpoints.FAVORITE_STORES_API,
+            json={"lat": client.config.lat, "lng": client.config.lng},
+        )
+        if isinstance(data, list):
+            return data
+        return data.get("stores", data.get("data", []))
+    except Exception:
+        # Endpoint may need additional params — fall back gracefully
+        return []
 
 
 async def get_rappi_credits(client: RappiClient) -> dict:
