@@ -832,8 +832,12 @@ async def remove_from_cart(store_id: int, product_id: int) -> dict:
 async def checkout(tip_amount: int = 0, confirm: bool = False) -> dict:
     """Preview checkout summary or place the order.
 
+    tip_amount: Delivery tip in COP (e.g., 3000 for $3.000). MUST be passed on BOTH
+    the preview call AND the confirm call — the tip is set fresh each time.
+
     IMPORTANT: Always call with confirm=False first to show the summary to the user.
-    Only call with confirm=True after the user explicitly approves.
+    Only call with confirm=True AND the same tip_amount after the user explicitly approves.
+    NEVER place an order without explicit user confirmation.
 
     When to use: After the user is done adding items and wants to review or place the order.
     Next step: If preview, show the summary and ask user to confirm. If placed, use track_order to follow delivery.
@@ -841,10 +845,11 @@ async def checkout(tip_amount: int = 0, confirm: bool = False) -> dict:
     async with _client_synced() as client:
         store_type = await _detect_cart_store_type(client)
 
-        await _recalculate_cart(client, store_type=store_type)
-
+        # Set tip BEFORE recalculate so it's included in the total
         if tip_amount > 0:
             await _set_tip(client, tip_amount, store_type=store_type)
+
+        await _recalculate_cart(client, store_type=store_type)
 
         detail = await _get_checkout_detail(client, store_type=store_type)
 
