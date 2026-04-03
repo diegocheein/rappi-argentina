@@ -312,9 +312,10 @@ def main():
 | `MCP_TRANSPORT` | `sse` | Enables HTTP transport |
 | `RAPPI_TOKEN` | `ft.xxxxx` | Rappi auth token (from `~/.rappi/config.json`) |
 | `RAPPI_DEVICE_ID` | UUID | Device ID (from `~/.rappi/config.json`) |
-| `RAPPI_LAT` | `4.624335` | Delivery latitude (from `rappi address set`) |
-| `RAPPI_LNG` | `-74.063644` | Delivery longitude (from `rappi address set`) |
+| `RAPPI_COUNTRY` | `co` | Country code (co, mx, br, ar, cl, pe, ec, cr, uy) |
 | `PORT` | (auto-set by Railway) | Railway injects this |
+
+**RAPPI_LAT/RAPPI_LNG are NOT needed** — coordinates are auto-synced from the user's active Rappi address.
 
 **Files**: `Dockerfile` (Python 3.12 + uv), `railway.json` (healthcheck at `/health`).
 

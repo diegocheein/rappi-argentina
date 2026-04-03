@@ -23,6 +23,7 @@ class RecentOrder(BaseModel):
 class RappiConfig(BaseModel):
     token: str | None = None
     device_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    country: str = "co"  # co, mx, br, ar, cl, pe, ec, cr, uy
     lat: float = DEFAULT_LAT
     lng: float = DEFAULT_LNG
     active_address_id: int | None = None
@@ -40,6 +41,9 @@ class ConfigManager:
             config = RappiConfig(**data)
         else:
             config = RappiConfig()
+        # Set RAPPI_COUNTRY from config so constants.py picks it up
+        if config.country and not os.environ.get("RAPPI_COUNTRY"):
+            os.environ["RAPPI_COUNTRY"] = config.country
         # Environment variables override file config (for remote deployment)
         env_token = os.environ.get("RAPPI_TOKEN")
         if env_token:

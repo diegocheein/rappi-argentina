@@ -1,8 +1,10 @@
 # Rappi Claude Plugin
 
-A Claude plugin that lets you order food from Rappi through conversation. Say "order me a burger" and Claude handles the rest — searching restaurants, browsing menus, customizing toppings, managing your cart, and placing the order. It remembers your favorites, preferences, and order history across conversations.
+A Claude plugin that lets you order food from [Rappi](https://www.rappi.com) through conversation. Say "order me a burger" and Claude handles the rest — searching restaurants, browsing menus, customizing toppings, managing your cart, and placing the order. It remembers your favorites, preferences, and order history across conversations.
 
 Works on **Claude Code**, **Claude Desktop**, and **Claude Cowork** (web).
+
+Supports all Rappi countries: Colombia, Mexico, Brazil, Argentina, Chile, Peru, Ecuador, Costa Rica, and Uruguay.
 
 ## How It Works
 
@@ -41,11 +43,23 @@ uv run playwright install chromium
 ### Authenticate
 
 ```bash
-# Opens a browser — log in with your phone + WhatsApp OTP
+# Opens a browser — log in with your phone + OTP
 uv run rappi auth login
+
+# For other countries (default is Colombia):
+uv run rappi auth login --country mx   # Mexico
+uv run rappi auth login --country br   # Brazil
+uv run rappi auth login --country ar   # Argentina
+uv run rappi auth login --country cl   # Chile
+uv run rappi auth login --country pe   # Peru
+uv run rappi auth login --country ec   # Ecuador
+uv run rappi auth login --country cr   # Costa Rica
+uv run rappi auth login --country uy   # Uruguay
 ```
 
 Your token is saved locally at `~/.rappi/config.json`. It never leaves your machine.
+
+For Railway deployment, also set `RAPPI_COUNTRY` environment variable to your country code.
 
 ### Activate the Plugin
 
@@ -229,6 +243,7 @@ Or deploy manually:
 | `RAPPI_TOKEN` | `ft.xxxxx` | Auth token from `~/.rappi/config.json` |
 | `RAPPI_DEVICE_ID` | UUID | Device ID from config |
 | `MCP_TRANSPORT` | `sse` | Enables HTTP transport |
+| `RAPPI_COUNTRY` | `co` | Country code (co, mx, br, ar, cl, pe, ec, cr, uy) |
 
 4. Railway auto-assigns a URL like `https://your-app.up.railway.app`
 5. Verify: `curl https://your-app.up.railway.app/health` should return `ok`

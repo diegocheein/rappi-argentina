@@ -20,10 +20,19 @@ console = Console()
 def login(
     token: str | None = typer.Option(None, "--token", "-t", help="Manual Bearer token (skips browser login)"),
     device_id: str | None = typer.Option(None, "--device-id", "-d", help="Device ID (UUID). Auto-generated if omitted."),
+    country: str = typer.Option("co", "--country", "-c", help="Country code: co, mx, br, ar, cl, pe, ec, cr, uy"),
     headless: bool = typer.Option(False, "--headless", help="Run browser in headless mode"),
 ) -> None:
     """Log in to Rappi. Opens a browser for you to sign in (or pass --token for manual auth)."""
+    import os
+    os.environ["RAPPI_COUNTRY"] = country
+    # Re-import to pick up the new country
+    import importlib
+    import rappi.constants
+    importlib.reload(rappi.constants)
+
     config_manager = ConfigManager()
+    config_manager.update(country=country)
 
     if token:
         # Manual token flow
@@ -37,10 +46,11 @@ def login(
         def on_status(msg: str) -> None:
             console.print(f"  [dim]{msg}[/dim]")
 
+        from rappi.constants import RAPPI_DOMAIN
         console.print(Panel(
             "[bold]Browser Login[/bold]\n\n"
-            "A browser window will open to [cyan]rappi.com.co/login[/cyan]\n"
-            "Log in with your phone number and WhatsApp OTP.\n"
+            f"A browser window will open to [cyan]{RAPPI_DOMAIN}/login[/cyan]\n"
+            "Log in with your phone number and OTP.\n"
             "The token will be captured automatically.\n\n"
             "[dim]Timeout: 5 minutes[/dim]",
             title="Rappi Auth",

@@ -1,11 +1,30 @@
 """Base URL, endpoints, and header templates for the Rappi API."""
 
+import os
+
 BASE_URL = "https://services.grability.rappi.com"
 IMAGES_BASE_URL = "https://images.rappi.com"
 
-# Default coordinates (Bogota)
-DEFAULT_LAT = 4.624335
-DEFAULT_LNG = -74.063644
+# Supported countries — domain used for login page, origin, and referer headers
+COUNTRY_DOMAINS = {
+    "co": "www.rappi.com.co",      # Colombia
+    "mx": "www.rappi.com.mx",      # Mexico
+    "br": "www.rappi.com.br",      # Brazil
+    "ar": "www.rappi.com.ar",      # Argentina
+    "cl": "www.rappi.cl",          # Chile
+    "pe": "www.rappi.pe",          # Peru
+    "ec": "www.rappi.com.ec",      # Ecuador
+    "cr": "www.rappi.co.cr",       # Costa Rica
+    "uy": "www.rappi.com.uy",      # Uruguay
+}
+
+# Country is set via RAPPI_COUNTRY env var or config — defaults to Colombia
+_country_code = os.environ.get("RAPPI_COUNTRY", "co").lower()
+RAPPI_DOMAIN = COUNTRY_DOMAINS.get(_country_code, COUNTRY_DOMAINS["co"])
+
+# Default coordinates (0,0 — auto-synced from active address at runtime)
+DEFAULT_LAT = 0.0
+DEFAULT_LNG = 0.0
 
 # Mobile user agent matching the Rappi web app
 USER_AGENT = (
@@ -29,8 +48,8 @@ def build_headers(token: str, device_id: str) -> dict[str, str]:
         "accept-language": "es-CO",
         "app-version": APP_VERSION,
         "needappsflyerid": "false",
-        "origin": "https://www.rappi.com.co",
-        "referer": "https://www.rappi.com.co/",
+        "origin": f"https://{RAPPI_DOMAIN}",
+        "referer": f"https://{RAPPI_DOMAIN}/",
         "user-agent": USER_AGENT,
         "vendor": "rappi",
         "x-application-id": f"rappi-microfront-web/{APP_VERSION}",

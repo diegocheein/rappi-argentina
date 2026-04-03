@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
-from rappi.constants import USER_AGENT
+from rappi.constants import RAPPI_DOMAIN, USER_AGENT
 
 
-LOGIN_URL = "https://www.rappi.com.co/login"
+LOGIN_URL = f"https://{RAPPI_DOMAIN}/login"
 AUTH_ENDPOINT = "/ms/application-user/auth"
 TIMEOUT_MS = 5 * 60 * 1000  # 5 minutes
 

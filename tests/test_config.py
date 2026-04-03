@@ -13,8 +13,8 @@ class TestRappiConfig:
         cfg = RappiConfig()
         assert cfg.token is None
         assert cfg.device_id  # auto-generated UUID
-        assert cfg.lat == pytest.approx(4.624335)
-        assert cfg.lng == pytest.approx(-74.063644)
+        assert cfg.lat == pytest.approx(0.0)
+        assert cfg.lng == pytest.approx(0.0)
         assert cfg.active_address_id is None
         assert cfg.recent_orders == []
         assert cfg.favorite_store_ids == []
