@@ -1,6 +1,6 @@
 # Rappi Claude Plugin
 
-A Claude plugin that lets you order food from [Rappi](https://www.rappi.com) through conversation. Say "order me a burger" and Claude handles the rest — searching restaurants, browsing menus, customizing toppings, managing your cart, and placing the order. It remembers your favorites, preferences, and order history across conversations.
+A Claude plugin that lets you order anything from [Rappi](https://www.rappi.com) through conversation — restaurants, Turbo convenience stores, supermarkets, pharmacies, and liquor stores. Say "order me a burger" or "find beer at Exito" and Claude handles the rest — searching stores, browsing products, managing your cart, and placing the order. It remembers your favorites, preferences, and order history across conversations.
 
 Works on **Claude Code**, **Claude Desktop**, and **Claude Cowork** (web).
 
@@ -21,7 +21,15 @@ You: "Looks good, place it"
 Claude: *places the order, tracks delivery with real-time ETA*
 ```
 
-The plugin gives Claude **38 tools** to interact with Rappi, **4 skills** for common workflows, a specialized ordering agent, and a local memory system that learns your preferences over time.
+```
+You: "Find me Michelob beer, check Exito and Turbo"
+
+Claude: *searches both store types, compares prices*
+        *Exito: $12,760 for 6-pack | Turbo: $15,480*
+        *"Exito has it cheaper — want me to add it to cart?"*
+```
+
+The plugin gives Claude **38 tools** to interact with Rappi across all store types — restaurants, Turbo, supermarkets, pharmacies, and more. It includes **4 skills** for common workflows, a specialized ordering agent, and a local memory system that learns your preferences over time.
 
 ## Install
 
@@ -88,8 +96,8 @@ Just talk to Claude naturally. The plugin auto-triggers when you mention food, o
 
 | Skill | Trigger | What Claude Does |
 |-------|---------|-----------------|
-| `/order-food` | "Order me food", "I'm hungry", "get me a burger" | Full workflow: search → menu → toppings → cart → checkout → track |
-| `/rappi-search` | "What restaurants are nearby?", "find beer at Turbo" | Searches stores and products, shows results |
+| `/order-food` | "Order me food", "I'm hungry", "get me a burger", "find beer at Turbo" | Full workflow: search → browse → cart → checkout → track |
+| `/rappi-search` | "What's available?", "find pizza", "search Exito for wine" | Searches all store types, shows results |
 | `/rappi-reorder` | "Order the same as last time", "reorder" | Pulls from order history, re-adds items to cart |
 | `/rappi-suggest` | "What should I eat?", "suggest something" | Analyzes taste profile, suggests based on habits, time, and history |
 
@@ -98,15 +106,16 @@ Just talk to Claude naturally. The plugin auto-triggers when you mention food, o
 Beyond the skills, Claude can use the 38 MCP tools in any combination:
 
 - "What's available on Rappi?" — shows all verticals (Restaurants, Turbo, Markets, Farmacia, Licores)
-- "Find me beer at Exito" — searches specific store types with products
-- "Browse the Turbo store aisles" — shows store categories
+- "Find me beer at Exito" — searches specific store types with products and prices
+- "Browse the Turbo store" — shows store categories and products
+- "Search for Tylenol at Farmatodo" — finds products in pharmacies
 - "What should I eat?" — analyzes taste profile, gives personalized suggestions
-- "What did I order last week?" — checks order history with cost breakdown
+- "What did I order last week?" — checks order history with full cost breakdown
 - "How much Rappi credit do I have?" — shows wallet balance
 - "Track my order" — real-time delivery state, ETA, driver position
-- "What were the fees on my last order?" — detailed cost breakdown
-- "Save El Corral as a favorite" — adds to favorites
-- "I'm allergic to peanuts" — saves to preferences
+- "What were the fees on my last order?" — detailed breakdown (delivery, service fee, discounts, tip)
+- "Save this store as a favorite" — adds to favorites
+- "I'm allergic to peanuts" — saves to preferences, filters future recommendations
 - "Always tip $5,000" — saves default tip
 
 ### Through the Terminal (CLI)
