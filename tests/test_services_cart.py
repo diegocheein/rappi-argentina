@@ -6,18 +6,19 @@ import pytest
 
 from rappi.services.cart import (
     _build_topping_payload,
-    _build_add_payload,
+    _new_product_payload,
+    _cart_product_to_payload,
     add_to_cart,
     get_carts,
     remove_from_cart,
     recalculate_cart,
 )
 from rappi.models.store import Product, Topping
-from rappi.models.cart import Cart
+from rappi.models.cart import Cart, CartProduct, CartTopping
 
 
 # ---------------------------------------------------------------------------
-# Payload building (§7 — compound IDs, three price fields, topping format)
+# Payload building (§7 — compound IDs, topping format)
 # ---------------------------------------------------------------------------
 
 class TestBuildToppingPayload:
@@ -37,80 +38,79 @@ class TestBuildToppingPayload:
         assert payload[0]["description"] == ""
 
 
-class TestBuildAddPayload:
+class TestNewProductPayload:
     def test_compound_id(self):
         product = Product(id=456, name="Burger", price=15000, real_price=15000)
-        payload = _build_add_payload(store_id=100, product=product)
-        assert payload[0]["products"][0]["id"] == "100_456"
-
-    def test_three_price_fields(self):
-        """API requires price, real_price, and markup_price."""
-        product = Product(id=1, name="Test", price=10000, real_price=12000)
-        payload = _build_add_payload(store_id=1, product=product)
-        p = payload[0]["products"][0]
-        assert p["price"] == 10000
-        assert p["real_price"] == 12000
-        assert p["markup_price"] == 10000
+        payload = _new_product_payload(store_id=100, product=product)
+        assert payload["id"] == "100_456"
 
     def test_quantity(self):
         product = Product(id=1, name="Test", price=5000)
-        payload = _build_add_payload(store_id=1, product=product, quantity=3)
-        assert payload[0]["products"][0]["units"] == 3
+        payload = _new_product_payload(store_id=1, product=product, quantity=3)
+        assert payload["units"] == 3
 
     def test_with_toppings(self):
         product = Product(id=1, name="Test", price=5000)
         toppings = [Topping(id=10, description="Extra", price=1000)]
-        payload = _build_add_payload(store_id=1, product=product, toppings=toppings)
-        assert len(payload[0]["products"][0]["toppings"]) == 1
-        assert payload[0]["products"][0]["toppings"][0]["id"] == 10
+        payload = _new_product_payload(store_id=1, product=product, toppings=toppings)
+        assert len(payload["toppings"]) == 1
+        assert payload["toppings"][0]["id"] == 10
 
     def test_no_toppings(self):
         product = Product(id=1, name="Test", price=5000)
-        payload = _build_add_payload(store_id=1, product=product)
-        assert payload[0]["products"][0]["toppings"] == []
+        payload = _new_product_payload(store_id=1, product=product)
+        assert payload["toppings"] == []
 
-    def test_real_price_fallback(self):
-        """If real_price is 0, should fall back to price."""
-        product = Product(id=1, name="Test", price=8000, real_price=0)
-        payload = _build_add_payload(store_id=1, product=product)
-        p = payload[0]["products"][0]
-        assert p["real_price"] == 8000  # falls back to price
+    def test_sale_type(self):
+        product = Product(id=1, name="Test", price=5000)
+        payload = _new_product_payload(store_id=1, product=product)
+        assert payload["sale_type"] == "U"
+
+
+class TestCartProductToPayload:
+    def test_round_trip(self):
+        cp = CartProduct(id="100_1", name="Burger", units=2, price=15000, toppings=[
+            CartTopping(id=10, description="Cheese", units=1, price=2000),
+        ])
+        payload = _cart_product_to_payload(cp)
+        assert payload["id"] == "100_1"
+        assert payload["units"] == 2
+        assert len(payload["toppings"]) == 1
+        assert payload["toppings"][0]["id"] == 10
 
 
 # ---------------------------------------------------------------------------
-# Cart operations (§7, §8, §9)
+# Cart operations — add uses GET+merge+PUT, remove uses PUT with remaining
 # ---------------------------------------------------------------------------
 
 class TestAddToCart:
     async def test_returns_carts(self, mock_client):
         product = Product(id=1, name="Burger", price=15000, real_price=15000)
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.content = b'[{}]'
-        mock_response.json.return_value = [
-            {"id": "cart-1", "store_type": "restaurant", "stores": [], "product_total": 15000}
-        ]
-        mock_client._http.request = AsyncMock(return_value=mock_response)
+        # Mock get_carts (POST to CART_GET_ALL) → empty cart
+        # Mock add (PUT to CART_ADD) → cart with product
+        call_count = 0
+        async def mock_request(method, url, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            resp = MagicMock()
+            resp.status_code = 200
+            if "get" in url:
+                # get_carts returns empty
+                resp.content = b'[]'
+                resp.json.return_value = []
+            else:
+                # PUT returns cart with item
+                resp.content = b'[{}]'
+                resp.json.return_value = [
+                    {"id": "cart-1", "store_type": "restaurant", "stores": [], "product_total": 15000}
+                ]
+            return resp
 
+        mock_client._http.request = mock_request
         carts = await add_to_cart(mock_client, 100, product)
         assert len(carts) == 1
         assert isinstance(carts[0], Cart)
-
-    async def test_single_dict_response(self, mock_client):
-        """API sometimes returns a single dict instead of a list."""
-        product = Product(id=1, name="Test", price=5000)
-
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.content = b'{}'
-        mock_response.json.return_value = {
-            "id": "cart-1", "store_type": "restaurant", "stores": []
-        }
-        mock_client._http.request = AsyncMock(return_value=mock_response)
-
-        carts = await add_to_cart(mock_client, 1, product)
-        assert len(carts) == 1
 
 
 class TestGetCarts:
@@ -144,17 +144,46 @@ class TestGetCarts:
 
 
 class TestRemoveFromCart:
-    async def test_calls_delete(self, mock_client):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.content = b''
-        mock_client._http.request = AsyncMock(return_value=mock_response)
+    async def test_uses_put_with_remaining(self, mock_client):
+        """Remove uses PUT with all products minus the removed one (not DELETE)."""
+        call_count = 0
+        put_payload = None
+        async def mock_request(method, url, **kwargs):
+            nonlocal call_count, put_payload
+            call_count += 1
+            resp = MagicMock()
+            resp.status_code = 200
+            if "get" in url:
+                # Existing cart has 2 items
+                resp.content = b'[{}]'
+                resp.json.return_value = [
+                    {
+                        "id": "c1", "store_type": "restaurant",
+                        "stores": [{
+                            "id": 100, "products": [
+                                {"id": "100_1", "name": "Burger", "units": 1, "price": 15000},
+                                {"id": "100_2", "name": "Fries", "units": 1, "price": 5000},
+                            ]
+                        }],
+                    }
+                ]
+            else:
+                # PUT returns updated cart
+                if kwargs.get("json"):
+                    put_payload = kwargs["json"]
+                resp.content = b'[{}]'
+                resp.json.return_value = [
+                    {"id": "c1", "store_type": "restaurant", "stores": [{"id": 100, "products": [{"id": "100_2", "name": "Fries", "units": 1}]}]}
+                ]
+            return resp
 
-        await remove_from_cart(mock_client, "100_200", store_type="restaurant")
-        mock_client._http.request.assert_called_once()
-        call_args = mock_client._http.request.call_args
-        assert call_args[0][0] == "DELETE"
-        assert "100_200" in call_args[0][1]
+        mock_client._http.request = mock_request
+        carts = await remove_from_cart(mock_client, 100, "100_1", store_type="restaurant")
+
+        # Should have sent PUT with only the Fries remaining
+        assert put_payload is not None
+        assert len(put_payload[0]["products"]) == 1
+        assert put_payload[0]["products"][0]["id"] == "100_2"
 
 
 class TestRecalculateCart:

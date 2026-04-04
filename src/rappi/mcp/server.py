@@ -1018,14 +1018,17 @@ async def view_cart() -> dict:
 async def remove_from_cart(store_id: int, product_id: int) -> dict:
     """Remove a product from the cart.
 
+    Uses the same full-replacement PUT as add_to_cart — sends remaining items.
+
     When to use: When the user wants to remove a specific item.
     Next step: Use view_cart to show updated contents.
     """
     compound_id = make_compound_id(store_id, product_id)
     async with _client_synced() as client:
         store_type = await _detect_cart_store_type(client)
-        await _remove_from_cart(client, compound_id, store_type=store_type)
-        return {"success": True, "removed": compound_id, "store_type": store_type}
+        carts = await _remove_from_cart(client, store_id, compound_id, store_type=store_type)
+        total_items = sum(p.units for cart in carts for s in cart.stores for p in s.products) if carts else 0
+        return {"success": True, "removed": compound_id, "cart_items": total_items, "store_type": store_type}
 
 
 @mcp.tool()
@@ -1046,11 +1049,11 @@ async def checkout(tip_amount: int = 0, confirm: bool = False) -> dict:
     async with _client_synced() as client:
         store_type = await _detect_cart_store_type(client)
 
-        # Set tip BEFORE recalculate — tip persists on Rappi's server between calls
+        # set_tip auto-recalculates; only recalculate separately if no tip
         if tip_amount > 0:
             await _set_tip(client, tip_amount, store_type=store_type)
-
-        await _recalculate_cart(client, store_type=store_type)
+        else:
+            await _recalculate_cart(client, store_type=store_type)
 
         detail = await _get_checkout_detail(client, store_type=store_type)
 
@@ -1527,13 +1530,42 @@ async def get_order_breakdown(order_id: int) -> dict:
 
 
 @mcp.tool()
-async def set_tip(tip_amount: int) -> dict:
-    """Set the delivery tip amount. This persists on Rappi's server until the order is placed.
+async def get_tip_suggestions() -> dict:
+    """Get suggested tip amounts for the current cart.
 
-    tip_amount: Tip in COP (e.g., 3000 for $3.000). Use 0 to remove tip.
+    Returns suggested amounts with percentage labels and absolute COP values.
+    One suggestion is marked as default.
+
+    When to use: Before setting a tip, to show the user their options.
+    """
+    from rappi.services.checkout import get_tip_suggestions as _get_tip_suggestions
+    async with _client_synced() as client:
+        data = await _get_tip_suggestions(client)
+        tips = data.get("tips", [])
+        return {
+            "suggestions": [
+                {
+                    "label": t.get("key", ""),
+                    "amount": t.get("price", 0),
+                    "is_default": t.get("default", False),
+                }
+                for t in tips
+            ],
+            "min_tip": data.get("min_tip_accepted", 0),
+            "max_tip": data.get("max_value", 0),
+        }
+
+
+@mcp.tool()
+async def set_tip(tip_amount: int) -> dict:
+    """Set the delivery tip amount. Recalculates cart totals automatically.
+
+    tip_amount: Absolute amount in COP (e.g., 2000 = $2.000 COP). NOT a percentage.
+    Use 0 to remove tip.
 
     When to use: Before checkout, or when the user wants to change the tip.
-    The tip set here will show in the checkout preview and be included when placing.
+    The tip persists on Rappi's server and will show in the checkout preview.
+    Call get_tip_suggestions first to show recommended amounts.
     """
     async with _client_synced() as client:
         store_type = await _detect_cart_store_type(client)

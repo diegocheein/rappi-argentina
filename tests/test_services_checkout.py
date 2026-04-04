@@ -62,24 +62,30 @@ class TestGetCheckoutDetail:
 
 
 class TestSetTip:
-    async def test_calls_put_with_tip(self, mock_client):
+    async def test_calls_put_then_recalculate(self, mock_client):
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.content = b''
+        mock_response.content = b'{}'
+        mock_response.json.return_value = {}
         mock_client._http.request = AsyncMock(return_value=mock_response)
 
         await set_tip(mock_client, 5000)
-        mock_client._http.request.assert_called_once()
-        call_args = mock_client._http.request.call_args
-        assert call_args[0][0] == "PUT"
-        assert call_args[1]["json"] == {"tip": 5000}
+        # set_tip now makes 2 calls: PUT tip + POST recalculate
+        assert mock_client._http.request.call_count == 2
+        first_call = mock_client._http.request.call_args_list[0]
+        assert first_call[0][0] == "PUT"
+        assert first_call[1]["json"] == {"tip": 5000}
+        second_call = mock_client._http.request.call_args_list[1]
+        assert second_call[0][0] == "POST"
+        assert "recalculate" in second_call[0][1]
 
     async def test_zero_tip(self, mock_client):
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.content = b''
+        mock_response.content = b'{}'
+        mock_response.json.return_value = {}
         mock_client._http.request = AsyncMock(return_value=mock_response)
 
         await set_tip(mock_client, 0)
-        call_args = mock_client._http.request.call_args
-        assert call_args[1]["json"] == {"tip": 0}
+        first_call = mock_client._http.request.call_args_list[0]
+        assert first_call[1]["json"] == {"tip": 0}

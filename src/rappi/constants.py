@@ -110,6 +110,7 @@ class Endpoints:
     CHECKOUT_DETAIL = "/api/ms/shopping-cart/v1/{store_type}/checkout/detail"
     CHECKOUT_WIDGETS = "/api/ms/checkout-component/{store_type}"
     SET_TIP = "/api/ms/shopping-cart/v1/{store_type}/tip"
+    TIP_SUGGESTIONS = "/api/ms/core-tip/user-segmentation"
     SET_PAYMENT_METHOD = "/api/ms/shopping-cart/v1/{store_type}/payment-method"
     PLACE_ORDER = "/api/ms/shopping-cart-proxy/{store_type}/checkout"
 

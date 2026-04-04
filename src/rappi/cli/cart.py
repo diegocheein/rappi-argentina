@@ -156,9 +156,9 @@ def remove_cmd(
 
     async def _run():
         async with RappiClient() as client:
-            await remove_from_cart(client, compound_id)
+            return await remove_from_cart(client, store_id, compound_id)
 
-    asyncio.run(_run())
+    carts = asyncio.run(_run())
     console.print(f"[green]Removed {compound_id} from cart.[/green]")
 
 

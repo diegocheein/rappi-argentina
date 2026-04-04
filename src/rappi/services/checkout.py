@@ -14,12 +14,28 @@ async def get_checkout_detail(
     return CheckoutDetail(**data)
 
 
+async def get_tip_suggestions(client: RappiClient) -> dict:
+    """Get suggested tip amounts based on current cart.
+
+    Returns suggested amounts with labels (percentages) and absolute values.
+    Example: {tips: [{key: "7%", price: 6500}, {key: "5%", price: 4600, default: true}]}
+    """
+    return await client.get(Endpoints.TIP_SUGGESTIONS)
+
+
 async def set_tip(
     client: RappiClient, tip_amount: int, store_type: str = "restaurant"
 ) -> None:
-    """Set the delivery tip amount. Use 0 to remove tip."""
+    """Set the delivery tip amount then recalculate cart totals.
+
+    tip_amount is an absolute value in COP (e.g., 2000 = $2,000 COP), not a percentage.
+    Use 0 to remove tip. Always recalculates cart after setting tip.
+    """
     path = Endpoints.SET_TIP.format(store_type=store_type)
     await client.put(path, json={"tip": tip_amount})
+    # Recalculate cart totals so the tip is reflected in the checkout summary
+    recalc_path = Endpoints.CART_RECALCULATE.format(store_type=store_type)
+    await client.post(recalc_path, json={})
 
 
 async def set_payment_method(
