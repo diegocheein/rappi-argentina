@@ -785,6 +785,7 @@ async def get_restaurant_menu(store_id: int, max_products_per_category: int = 10
             "name": store.name,
             "store_type": store.effective_store_type,
             "status": store.status.status if store.status else "unknown",
+            "note": "Product availability is confirmed when adding to cart. The menu shows all products regardless of real-time availability.",
             "categories": [
                 {
                     "name": c.name,
@@ -795,7 +796,6 @@ async def get_restaurant_menu(store_id: int, max_products_per_category: int = 10
                             "name": p.name,
                             "description": p.description,
                             "price": p.price,
-                            "in_stock": p.in_stock,
                             "has_toppings": p.has_toppings,
                         }
                         for p in c.products[:max_products_per_category]
@@ -926,8 +926,9 @@ async def add_to_cart(
         if not product:
             return {"error": f"Product {product_id} not found in store {store_id}. For non-restaurant stores, use the product_id from search_restaurants or browse_stores results."}
 
-        if not product.in_stock:
-            return {"error": f"'{product.name}' is currently out of stock"}
+        # Note: we do NOT block on product.in_stock here. The menu endpoint's
+        # is_available flag is unreliable — it can be False even when the restaurant
+        # is open and accepting orders. Let Rappi's cart API decide availability.
 
         # Validate toppings for products that require them
         selected_toppings = []
