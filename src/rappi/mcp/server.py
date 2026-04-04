@@ -1032,14 +1032,14 @@ async def remove_from_cart(store_id: int, product_id: int) -> dict:
 
 
 @mcp.tool()
-async def checkout(tip_amount: int = 0, confirm: bool = False) -> dict:
+async def checkout(confirm: bool = False) -> dict:
     """Preview checkout summary or place the order.
 
-    tip_amount: Delivery tip in COP (e.g., 3000 for $3.000). The tip is saved on
-    Rappi's server, so it persists between preview and confirm calls. Pass it on
-    the preview call — it will still be there when you confirm.
+    IMPORTANT: Call set_tip BEFORE calling checkout to set the delivery tip.
+    Do NOT pass tip here — use the dedicated set_tip tool. The tip persists on
+    Rappi's server and will show in the preview automatically.
 
-    IMPORTANT: Always call with confirm=False first to show the summary to the user.
+    Always call with confirm=False first to show the summary to the user.
     Only call with confirm=True after the user explicitly approves.
     NEVER place an order without explicit user confirmation.
 
@@ -1049,11 +1049,7 @@ async def checkout(tip_amount: int = 0, confirm: bool = False) -> dict:
     async with _client_synced() as client:
         store_type = await _detect_cart_store_type(client)
 
-        # set_tip auto-recalculates; only recalculate separately if no tip
-        if tip_amount > 0:
-            await _set_tip(client, tip_amount, store_type=store_type)
-        else:
-            await _recalculate_cart(client, store_type=store_type)
+        await _recalculate_cart(client, store_type=store_type)
 
         detail = await _get_checkout_detail(client, store_type=store_type)
 
