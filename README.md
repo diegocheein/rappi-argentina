@@ -29,7 +29,7 @@ Claude: *searches both store types, compares prices*
         *"Exito has it cheaper — want me to add it to cart?"*
 ```
 
-The plugin gives Claude **39 tools** to interact with Rappi across all store types — restaurants, Turbo, supermarkets, pharmacies, and more. It includes **4 skills** for common workflows, a specialized ordering agent, and a local memory system that learns your preferences over time.
+The plugin gives Claude **40 tools** to interact with Rappi across all store types — restaurants, Turbo, supermarkets, pharmacies, and more. It includes **4 skills** for common workflows, a specialized ordering agent, and a local memory system that learns your preferences over time.
 
 ## Install
 
@@ -183,7 +183,7 @@ uv run rappi prefs                 # Your preferences
 ## MCP Tools Reference
 
 <details>
-<summary>All 39 tools</summary>
+<summary>All 40 tools</summary>
 
 **Discovery & Browsing**
 - `explore_verticals` — all available store types in area (Restaurants, Turbo, Markets, Farmacia, Licores)
@@ -203,8 +203,9 @@ uv run rappi prefs                 # Your preferences
 **Cart & Checkout**
 - `add_to_cart(store_id, product_id, quantity, topping_ids, product_name, product_price)` — add item
 - `view_cart` / `remove_from_cart(store_id, product_id)`
-- `set_tip(tip_amount)` — set delivery tip (persists until order is placed)
-- `checkout(confirm)` — preview then place (auto-detects store_type)
+- `get_tip_suggestions` — suggested tip amounts for current cart
+- `set_tip(tip_amount)` — set delivery tip in COP (persists until order is placed)
+- `checkout(confirm)` — preview then place. Use set_tip before, not during checkout.
 - `get_payment_methods` — available payment methods and cards
 
 **Order Tracking**

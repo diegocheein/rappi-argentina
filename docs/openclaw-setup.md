@@ -134,7 +134,7 @@ uv run rappi auth status
 | `skills/rappi-search/SKILL.md` | OpenClaw skill | Works |
 | `skills/rappi-reorder/SKILL.md` | OpenClaw skill | Works |
 | `skills/rappi-suggest/SKILL.md` | OpenClaw skill | Works |
-| `.mcp.json` (39 tools) | MCP tools (`rappi__*`) | Works |
+| `.mcp.json` (40 tools) | MCP tools (`rappi__*`) | Works |
 | `agents/rappi-agent.md` | Not mapped | OpenClaw ignores agents |
 
 ## Tool Naming
@@ -217,7 +217,7 @@ The `app-version` header may be outdated. See [Updating the app-version Header](
 | Feature | Claude | OpenClaw |
 |---|---|---|
 | Skills | Auto-triggered by description | Auto-triggered by description |
-| MCP Tools | 39 tools via `mcp__rappi__*` | 39 tools via `rappi__*` |
+| MCP Tools | 40 tools via `mcp__rappi__*` | 40 tools via `rappi__*` |
 | Agent | `rappi-agent.md` (Sonnet) | Not supported (agents ignored) |
 | Memory | Full (SQLite local) | Full (SQLite local) |
 | Remote deploy | Railway + Cowork zip | Railway + bundle install |
