@@ -377,6 +377,12 @@ npx @modelcontextprotocol/inspector uv run rappi-mcp  # Test MCP in browser
 
 See [CLAUDE.md](CLAUDE.md) for the developer reference, [API_ENDPOINTS.md](API_ENDPOINTS.md) for the full Rappi API map, and [TESTING.md](TESTING.md) for the manual testing checklist.
 
+## Author
+
+**Gabriel Garavit** — [GitHub](https://github.com/garavitgabriel)
+
+Built with Claude Code. API reverse-engineered from Rappi's web app using browser DevTools and [reverse-api-engineer](https://github.com/kalil0321/reverse-api-engineer).
+
 ## License
 
 MIT
