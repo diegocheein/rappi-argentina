@@ -6,6 +6,17 @@ Works on **Claude Code**, **Claude Desktop**, **Claude Cowork** (web), and **[Op
 
 Supports **Colombia** and **Mexico**.
 
+<table>
+<tr>
+<td align="center"><b>Claude Code</b></td>
+<td align="center"><b>OpenClaw</b></td>
+</tr>
+<tr>
+<td><img src="assets/demo-claude-code.gif" alt="Rappi plugin in Claude Code" width="600"></td>
+<td><img src="assets/demo-openclaw.gif" alt="Rappi plugin in OpenClaw" width="280"></td>
+</tr>
+</table>
+
 ## What You Can Do
 
 ```
