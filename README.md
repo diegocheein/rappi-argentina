@@ -1,4 +1,4 @@
-# Rappi Claude Plugin
+# Rappi Plugin — Claude & OpenClaw
 
 Order anything from [Rappi](https://www.rappi.com) through conversation. Restaurants, groceries, convenience stores, pharmacies, liquor — if it's on Rappi, you can order it by talking to your AI assistant. The plugin handles searching, browsing, cart management, checkout, and delivery tracking. It learns your preferences over time and gets smarter with every order.
 
@@ -73,8 +73,8 @@ Not just restaurants. The plugin works with every store type on Rappi — cart, 
 ### Setup
 
 ```bash
-git clone https://github.com/garavitgabriel/rappi-claude-plugin.git
-cd rappi-claude-plugin
+git clone https://github.com/garavitgabriel/rappi-plugin-claude-openclaw.git
+cd rappi-plugin-claude-openclaw
 uv sync
 uv run playwright install chromium
 ```
