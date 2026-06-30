@@ -1,0 +1,15 @@
+{
+  "name": "rappi-argentina",
+  "owner": {
+    "name": "Diego Cheein",
+    "url": "https://github.com/diegocheein"
+  },
+  "plugins": [
+    {
+      "name": "rappi-argentina",
+      "source": "./",
+      "description": "Pedí de Rappi Argentina conversando con Claude — buscar productos, detectar ofertas reales, armar el carrito, pagar y seguir la entrega.",
+      "version": "1.0.0"
+    }
+  ]
+}

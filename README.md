@@ -22,7 +22,29 @@ Pedí de **Rappi Argentina** conversando con Claude (Claude Code, Desktop) o des
 
 ---
 
-## 🚀 Arranque rápido
+## 📦 Instalar desde Claude Code (plugin)
+
+La forma más fácil. En Claude Code:
+
+```
+/plugin marketplace add diegocheein/rappi-argentina
+/plugin install rappi-argentina
+```
+
+Eso registra las skills, el agente y el servidor MCP. Las dependencias de Python se instalan solas la primera vez que se usa (vía `uv`).
+
+**Setup que se hace una sola vez** (el motor es Python y hay que entrar a tu cuenta):
+
+```bash
+uv run playwright install chromium          # navegador para el login
+uv run rappi auth login --country ar        # teléfono + OTP
+```
+
+> Requisitos: **Python 3.12+** y **[uv](https://docs.astral.sh/uv/)** instalados, y una **cuenta de Rappi Argentina**.
+
+---
+
+## 🚀 Instalación manual (clonando el repo)
 
 ```bash
 git clone https://github.com/diegocheein/rappi-argentina.git

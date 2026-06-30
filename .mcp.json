@@ -2,7 +2,7 @@
   "mcpServers": {
     "rappi": {
       "command": "uv",
-      "args": ["run", "--project", ".", "rappi-mcp"]
+      "args": ["run", "--project", "${CLAUDE_PLUGIN_ROOT}", "rappi-mcp"]
     }
   }
 }
