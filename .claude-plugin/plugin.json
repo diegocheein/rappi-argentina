@@ -1,8 +1,8 @@
 {
-  "name": "rappi",
-  "description": "Rappi food delivery plugin for Claude. Order food through conversation — search restaurants, browse menus, customize orders, checkout, and track deliveries. Remembers your favorites, preferences, and order history.",
-  "version": "0.1.0",
-  "author": { "name": "Gabriel Garavit" },
-  "repository": "https://github.com/garavitgabriel/rappi-claude-plugin",
+  "name": "rappi-argentina",
+  "description": "Plugin de Rappi Argentina para Claude. Pedí conversando — buscá productos y tiendas, detectá ofertas reales, armá el carrito, pagá y seguí la entrega. Recuerda tus favoritos, preferencias e historial.",
+  "version": "1.0.0",
+  "author": { "name": "Diego Cheein" },
+  "repository": "https://github.com/diegocheein/rappi-argentina",
   "license": "MIT"
 }

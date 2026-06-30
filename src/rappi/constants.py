@@ -1,51 +1,11 @@
-"""Base URL, endpoints, and header templates for the Rappi API."""
-
-import json
-import os
-from pathlib import Path
+"""Base URL, endpoints, and header templates for the Rappi Argentina API."""
 
 IMAGES_BASE_URL = "https://images.rappi.com"
 
-
-def _resolve_country() -> str:
-    """Resolve the active country at import time.
-
-    Order: RAPPI_COUNTRY env var → ~/.rappi/config.json → default "co".
-    Reading the config file here (not just the env var) means every entry
-    point — CLI commands, the MCP server — picks up the saved country
-    without each having to set the env var before importing this module.
-    """
-    cc = os.environ.get("RAPPI_COUNTRY")
-    if cc:
-        return cc.lower()
-    cfg_path = Path.home() / ".rappi" / "config.json"
-    if cfg_path.exists():
-        try:
-            data = json.loads(cfg_path.read_text())
-            if data.get("country"):
-                return str(data["country"]).lower()
-        except Exception:
-            pass
-    return "co"
-
-# Supported countries
-# - domain: login page, origin/referer headers
-# - base_url: full API host (differs per country — not a single shared pattern)
-#     CO/MX use services.{prefix}grability.rappi.com; AR uses services.rappi.com.ar
-# - lang: value for the accept-language header
-COUNTRIES = {
-    "co": {"domain": "www.rappi.com.co", "base_url": "https://services.grability.rappi.com",   "lang": "es-CO", "name": "Colombia"},
-    "mx": {"domain": "www.rappi.com.mx", "base_url": "https://services.mxgrability.rappi.com", "lang": "es-MX", "name": "Mexico"},
-    "ar": {"domain": "www.rappi.com.ar", "base_url": "https://services.rappi.com.ar",          "lang": "es-AR", "name": "Argentina"},
-}
-
-# Country resolved from RAPPI_COUNTRY env var or ~/.rappi/config.json — defaults to Colombia
-_country_code = _resolve_country()
-_country = COUNTRIES.get(_country_code, COUNTRIES["co"])
-
-RAPPI_DOMAIN = _country["domain"]
-BASE_URL = _country["base_url"]
-ACCEPT_LANGUAGE = _country.get("lang", "es-CO")
+# Rappi Argentina
+RAPPI_DOMAIN = "www.rappi.com.ar"
+BASE_URL = "https://services.rappi.com.ar"
+ACCEPT_LANGUAGE = "es-AR"
 
 # Default coordinates (0,0 — auto-synced from active address at runtime)
 DEFAULT_LAT = 0.0
@@ -57,21 +17,14 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36"
 )
 
-APP_VERSION = "e1de6be43aa29091011474615d7ac0810051c36a"
-
-# Different parts of the Rappi web app use different x-application-id values
-WEB_VERSION = "web_v1.154.3"
-CHECKOUT_VERSION = "v1.80.0"
-
-
 def build_headers(token: str, device_id: str) -> dict[str, str]:
-    """Build the header set required by every Rappi API request.
+    """Build the minimal header set Rappi Argentina's API requires.
 
-    AR's API gateway returns an empty 200 (no body) when the CO/MX headers
-    `app-version`, `x-application-id`, `vendor`, `origin`, and `sec-fetch-*`
-    are present. Argentina's web app sends a minimal set, so we match it.
+    AR's gateway returns an empty 200 (no body) if the extra headers other
+    Rappi markets send (app-version, x-application-id, vendor, origin,
+    sec-fetch-*) are present, so we send only what the AR web app sends.
     """
-    headers = {
+    return {
         "authorization": f"Bearer {token}",
         "deviceid": device_id,
         "accept": "application/json",
@@ -80,42 +33,18 @@ def build_headers(token: str, device_id: str) -> dict[str, str]:
         "referer": f"https://{RAPPI_DOMAIN}/",
         "user-agent": USER_AGENT,
         "sec-ch-ua": '"Not-A.Brand";v="24", "Chromium";v="146"',
-        "sec-ch-ua-mobile": "?0" if _country_code == "ar" else "?1",
+        "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": '"Android"',
     }
-    if _country_code != "ar":
-        headers.update({
-            "app-version": APP_VERSION,
-            "origin": f"https://{RAPPI_DOMAIN}",
-            "vendor": "rappi",
-            "x-application-id": f"rappi-microfront-web/{APP_VERSION}",
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "cross-site",
-        })
-    return headers
 
 
-# Context-specific header overrides for endpoints that need different app IDs.
-# On AR, the app-version / x-application-id keys trigger the empty-200 behaviour,
-# so they're dropped there (the genuinely useful context flags are kept).
-if _country_code == "ar":
-    HEADERS_BROWSE = {
-        "include_context_info": "true",
-        "language": "es",
-    }
-    HEADERS_CHECKOUT = {}
-else:
-    HEADERS_BROWSE = {
-        "x-application-id": WEB_VERSION,
-        "app-version": WEB_VERSION,
-        "include_context_info": "true",
-        "language": "es",
-    }
-    HEADERS_CHECKOUT = {
-        "x-application-id": f"rappi-checkout-web/{CHECKOUT_VERSION}",
-        "app-version": CHECKOUT_VERSION,
-    }
+# Context overrides — AR keeps only the useful context flags (no app-version /
+# x-application-id, which would trigger the empty-200 behaviour).
+HEADERS_BROWSE = {
+    "include_context_info": "true",
+    "language": "es",
+}
+HEADERS_CHECKOUT = {}
 
 HEADERS_FAVORITES = {
     "content-type": "application/json; charset=UTF-8",

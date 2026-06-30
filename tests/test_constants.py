@@ -1,17 +1,12 @@
 """Tests for rappi.constants — headers, endpoints, and image URLs."""
 
 from rappi.constants import (
-    APP_VERSION,
     BASE_URL,
     IMAGES_BASE_URL,
     Endpoints,
-    _country_code,
     build_headers,
     resolve_image_url,
 )
-
-# AR's gateway rejects the CO/MX headers — see build_headers() in constants.py
-_IS_AR = _country_code == "ar"
 
 
 class TestBuildHeaders:
@@ -25,32 +20,27 @@ class TestBuildHeaders:
 
     def test_contains_required_headers(self):
         headers = build_headers("t", "d")
-        # Common to every country
         for key in ["authorization", "deviceid", "accept", "accept-language",
                     "referer", "user-agent"]:
             assert key in headers, f"Missing header: {key}"
-        # CO/MX also send these; AR must NOT (gateway returns empty 200 otherwise)
-        co_mx_only = ["app-version", "origin", "vendor", "x-application-id"]
-        for key in co_mx_only:
-            assert (key in headers) is (not _IS_AR), f"{key} presence wrong for country={_country_code}"
 
-    def test_app_version_header(self):
+    def test_minimal_header_set(self):
+        # Argentina's gateway returns an empty 200 if these headers are present
         headers = build_headers("t", "d")
-        if _IS_AR:
-            assert "app-version" not in headers
-        else:
-            assert headers["app-version"] == APP_VERSION
+        for key in ["app-version", "origin", "vendor", "x-application-id",
+                    "sec-fetch-site"]:
+            assert key not in headers, f"AR must not send {key}"
+
+    def test_accept_language_is_ar(self):
+        headers = build_headers("t", "d")
+        assert headers["accept-language"] == "es-AR"
 
     def test_accept_json(self):
         headers = build_headers("t", "d")
         assert headers["accept"] == "application/json"
 
-    def test_vendor_is_rappi(self):
-        headers = build_headers("t", "d")
-        if _IS_AR:
-            assert "vendor" not in headers
-        else:
-            assert headers["vendor"] == "rappi"
+    def test_base_url_is_argentina(self):
+        assert BASE_URL == "https://services.rappi.com.ar"
 
 
 class TestResolveImageUrl:

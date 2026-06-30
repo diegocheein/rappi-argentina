@@ -23,7 +23,7 @@ class RecentOrder(BaseModel):
 class RappiConfig(BaseModel):
     token: str | None = None
     device_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    country: str = "co"  # co, mx, br, ar, cl, pe, ec, cr, uy
+    country: str = "ar"  # Rappi Argentina
     lat: float = DEFAULT_LAT
     lng: float = DEFAULT_LNG
     active_address_id: int | None = None

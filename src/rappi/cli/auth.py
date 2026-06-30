@@ -20,7 +20,7 @@ console = Console()
 def login(
     token: str | None = typer.Option(None, "--token", "-t", help="Manual Bearer token (skips browser login)"),
     device_id: str | None = typer.Option(None, "--device-id", "-d", help="Device ID (UUID). Auto-generated if omitted."),
-    country: str = typer.Option("co", "--country", "-c", help="Country code: co (Colombia), mx (Mexico), ar (Argentina)"),
+    country: str = typer.Option("ar", "--country", "-c", help="País (solo Argentina / ar)"),
     headless: bool = typer.Option(False, "--headless", help="Run browser in headless mode"),
 ) -> None:
     """Log in to Rappi. Opens a browser for you to sign in (or pass --token for manual auth)."""
@@ -131,7 +131,7 @@ def status() -> None:
 def token(
     bearer_token: str = typer.Argument(..., help="Rappi Bearer token (starts with 'ft.')"),
     device_id: str = typer.Argument(..., help="Device ID (UUID from browser DevTools)"),
-    country: str = typer.Option("co", "--country", "-c", help="Country code: co (Colombia), mx (Mexico), ar (Argentina)"),
+    country: str = typer.Option("ar", "--country", "-c", help="País (solo Argentina / ar)"),
 ) -> None:
     """Set auth credentials directly — no browser needed. Ideal for headless servers.
 

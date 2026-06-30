@@ -1,8 +1,10 @@
-# CLAUDE.md — Rappi Claude Plugin
+# CLAUDE.md — Rappi Argentina (Claude plugin)
 
 ## What This Project Is
 
-A **plugin** for ordering food from Rappi (Colombia's leading delivery platform). Works on **Claude** (Code, Desktop, Cowork) and **OpenClaw**. The plugin gives the AI the ability to search restaurants, browse menus, manage a cart, place orders, and track deliveries — with a local memory system that learns the user's preferences over time.
+A **plugin** for ordering from **Rappi Argentina** (`services.rappi.com.ar`). Works on **Claude** (Code, Desktop, Cowork) and **OpenClaw**. The plugin gives the AI the ability to search stores, browse menus/catalogs, manage a cart, detect real discounts, place orders, and track deliveries — with a local memory system that learns the user's preferences over time.
+
+> Argentina version by Diego Cheein. Built on the base plugin architecture by Gabriel Garavit (MIT). See [DESARROLLO.md](DESARROLLO.md) for the Argentina engineering write-up.
 
 The plugin consists of: **skills** (workflow instructions), **MCP tools** (39 capabilities), **an agent** (specialized ordering intelligence — Claude only), **memory** (SQLite persistence), and a **CLI** (terminal alternative).
 
