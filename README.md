@@ -1,10 +1,10 @@
 # Rappi Plugin — Claude & OpenClaw
 
-> ## 🇦🇷 Fork con soporte **Argentina**
-> Este repositorio es un fork del plugin original que **agrega Argentina** (host `services.rappi.com.ar`).
+> ## 🇦🇷 Rappi Argentina — por [Diego Cheein](https://github.com/diegocheein)
+> Versión con **soporte completo para Argentina** (host `services.rappi.com.ar`): autenticación, búsqueda, detección de ofertas reales, carrito, pedido y seguimiento — adaptados y desarrollados para AR por **Diego Cheein**.
 > 👉 **Guía de uso en español: [GUIA-ARGENTINA.md](GUIA-ARGENTINA.md)**
 > Login: `uv run rappi auth login --country ar`
-> Fork basado en el excelente trabajo de [Gabriel Garavit](https://github.com/garavitgabriel/rappi-plugin-claude-openclaw) (Colombia/México). Licencia MIT.
+> _Construido sobre el plugin base de Gabriel Garavit (Colombia/México), licencia MIT._
 
 ---
 

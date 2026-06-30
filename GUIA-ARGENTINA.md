@@ -2,7 +2,8 @@
 
 Plugin para pedir de **Rappi Argentina** conversando con Claude (Claude Code, Desktop) o desde la terminal. Buscás productos, armás el carrito, comparás ofertas reales, pedís y seguís la entrega — todo con tu cuenta de Rappi.
 
-> Este es un **fork con soporte Argentina** del plugin original de [Gabriel Garavit](https://github.com/garavitgabriel/rappi-plugin-claude-openclaw) (que soporta Colombia y México). Acá se agregó Argentina. Ver [qué cambió](#qué-se-agregó-para-argentina).
+> **Versión Argentina desarrollada por [Diego Cheein](https://github.com/diegocheein).** Soporte completo para Rappi AR (`services.rappi.com.ar`): login, búsqueda, ofertas, carrito, pedido y tracking. Ver [qué se desarrolló para Argentina](#qué-se-desarrolló-para-argentina).
+> _Construido sobre el plugin base de Gabriel Garavit (Colombia/México), licencia MIT._
 
 ---
 
@@ -101,9 +102,9 @@ Y le hablás natural: *"buscá pizza en Vea"*, *"armame un carrito con lo que co
 
 ---
 
-## 🇦🇷 Qué se agregó para Argentina
+## 🇦🇷 Qué se desarrolló para Argentina
 
-Respecto al plugin original (Colombia/México), los cambios fueron mínimos y están en pocos archivos:
+El desarrollo del soporte Argentina (lo de este fork) está en estos archivos:
 
 - **`src/rappi/constants.py`** — host de API de Argentina (`services.rappi.com.ar`), país `ar`, header `accept-language: es-AR`, y resolución de país desde `~/.rappi/config.json`. Argentina usa un **set mínimo de headers**: el gateway de AR devuelve respuestas vacías si se le mandan los headers extra de CO/MX (`app-version`, `x-application-id`, etc.).
 - **`src/rappi/services/address.py`** — sincronización de coordenadas tolerante (AR no tiene el endpoint de "marcar dirección activa").
@@ -116,6 +117,8 @@ Respecto al plugin original (Colombia/México), los cambios fueron mínimos y es
 
 ## 📄 Licencia y créditos
 
-Licencia **MIT**. Plugin original creado por **Gabriel Garavit** — [garavitgabriel/rappi-plugin-claude-openclaw](https://github.com/garavitgabriel/rappi-plugin-claude-openclaw). Este fork agrega soporte para Argentina.
+**Versión Argentina:** desarrollada por **Diego Cheein** — [@diegocheein](https://github.com/diegocheein).
+
+Licencia **MIT**. Construido sobre el plugin base de Gabriel Garavit ([garavitgabriel/rappi-plugin-claude-openclaw](https://github.com/garavitgabriel/rappi-plugin-claude-openclaw)), del que se reutilizó la arquitectura de Colombia/México.
 
 > ⚠️ Proyecto no oficial, sin relación con Rappi S.A. Usalo con tu propia cuenta y bajo tu responsabilidad.
