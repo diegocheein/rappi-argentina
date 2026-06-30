@@ -18,7 +18,7 @@ Pedí de **Rappi Argentina** conversando con Claude (Claude Code, Desktop) o des
 - **Reposición inteligente:** aprende qué comprás seguido y arma la canasta.
 - **Poner propina**, **confirmar el pedido** (entrega inmediata) y **seguir la entrega** en tiempo real.
 
-> ⚠️ La entrega **programada con franja horaria** (ej: "mañana 10–12") todavía no está soportada — solo **entrega inmediata**. Para programar, confirmá desde la app (el carrito queda guardado en tu cuenta). Ver [DESARROLLO.md](DESARROLLO.md#10-entrega-programada-investigado-no-soportado).
+> 💡 El pedido se confirma con **entrega inmediata** y funciona end-to-end (carrito → propina → pago → seguimiento). Si querés elegir un **día/franja horaria**, hacé el paso final desde la app — el carrito queda guardado en tu cuenta.
 
 ---
 

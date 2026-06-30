@@ -19,7 +19,7 @@ Plugin para pedir de **Rappi Argentina** conversando con Claude (Claude Code, De
 - **Confirmar el pedido** (entrega inmediata) y **seguir la entrega** en tiempo real.
 - **Memoria local**: aprende qué comprás seguido y arma canastas de reposición.
 
-> ⚠️ **Limitación conocida:** la entrega **programada con franja horaria** (ej: "mañana de 10 a 12") todavía no está soportada por el conector; solo **entrega inmediata**. Para programar un día/horario, confirmá el pedido desde la app de Rappi (el carrito que armes queda guardado en tu cuenta).
+> 💡 **Entrega:** el pedido se hace con **entrega inmediata** y funciona de punta a punta (carrito → propina → pago → seguimiento). Si preferís elegir un **día o franja horaria**, hacé el paso final desde la app de Rappi — el carrito que armes queda guardado en tu cuenta.
 
 ---
 
