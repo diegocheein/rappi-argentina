@@ -5,9 +5,13 @@ from rappi.constants import (
     BASE_URL,
     IMAGES_BASE_URL,
     Endpoints,
+    _country_code,
     build_headers,
     resolve_image_url,
 )
+
+# AR's gateway rejects the CO/MX headers — see build_headers() in constants.py
+_IS_AR = _country_code == "ar"
 
 
 class TestBuildHeaders:
@@ -21,17 +25,21 @@ class TestBuildHeaders:
 
     def test_contains_required_headers(self):
         headers = build_headers("t", "d")
-        required_keys = [
-            "authorization", "deviceid", "accept", "accept-language",
-            "app-version", "origin", "referer", "user-agent", "vendor",
-            "x-application-id",
-        ]
-        for key in required_keys:
+        # Common to every country
+        for key in ["authorization", "deviceid", "accept", "accept-language",
+                    "referer", "user-agent"]:
             assert key in headers, f"Missing header: {key}"
+        # CO/MX also send these; AR must NOT (gateway returns empty 200 otherwise)
+        co_mx_only = ["app-version", "origin", "vendor", "x-application-id"]
+        for key in co_mx_only:
+            assert (key in headers) is (not _IS_AR), f"{key} presence wrong for country={_country_code}"
 
     def test_app_version_header(self):
         headers = build_headers("t", "d")
-        assert headers["app-version"] == APP_VERSION
+        if _IS_AR:
+            assert "app-version" not in headers
+        else:
+            assert headers["app-version"] == APP_VERSION
 
     def test_accept_json(self):
         headers = build_headers("t", "d")
@@ -39,7 +47,10 @@ class TestBuildHeaders:
 
     def test_vendor_is_rappi(self):
         headers = build_headers("t", "d")
-        assert headers["vendor"] == "rappi"
+        if _IS_AR:
+            assert "vendor" not in headers
+        else:
+            assert headers["vendor"] == "rappi"
 
 
 class TestResolveImageUrl:

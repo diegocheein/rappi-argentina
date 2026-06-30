@@ -14,3 +14,13 @@ wheels/
 
 # Rappi config (contains auth token)
 .rappi/
+
+# Personal data — order history, captured account data, product photos (NEVER commit)
+orders_*.json
+orders_*.jsonl
+*.HEIC
+fotos/
+
+# Local reverse-engineering / diagnostic scripts
+diagnose_*.py
+capture_*.py

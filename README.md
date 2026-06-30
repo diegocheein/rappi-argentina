@@ -1,10 +1,18 @@
 # Rappi Plugin — Claude & OpenClaw
 
+> ## 🇦🇷 Fork con soporte **Argentina**
+> Este repositorio es un fork del plugin original que **agrega Argentina** (host `services.rappi.com.ar`).
+> 👉 **Guía de uso en español: [GUIA-ARGENTINA.md](GUIA-ARGENTINA.md)**
+> Login: `uv run rappi auth login --country ar`
+> Fork basado en el excelente trabajo de [Gabriel Garavit](https://github.com/garavitgabriel/rappi-plugin-claude-openclaw) (Colombia/México). Licencia MIT.
+
+---
+
 Order anything from [Rappi](https://www.rappi.com) through conversation. Restaurants, groceries, convenience stores, pharmacies, liquor — if it's on Rappi, you can order it by talking to your AI assistant. The plugin handles searching, browsing, cart management, checkout, and delivery tracking. It learns your preferences over time and gets smarter with every order.
 
 Works on **Claude Code**, **Claude Desktop**, **Claude Cowork** (web), and **[OpenClaw](https://openclaw.ai)**.
 
-Supports **Colombia** and **Mexico**.
+Supports **Colombia**, **Mexico**, and **Argentina** 🇦🇷.
 
 <table>
 <tr>
