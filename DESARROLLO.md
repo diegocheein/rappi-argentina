@@ -42,9 +42,11 @@ GET /api/orders/history-user?page=N   (paginado)
 
 Trae cada pedido con sus productos, cantidades, precios y tienda — base para reconstruir canastas de reposición a partir de lo que se compra seguido.
 
-## 6. Ofertas reales vs. "precio Prime"
+## 6. Ofertas reales vs. "precio Prime" (en súper tipo Vea)
 
-Hallazgo clave para no engañar al usuario: en el catálogo, muchos descuentos (`have_discount`, `discount`) son **precios Prime** que **solo se cobran a socios** — un usuario no-Prime paga precio lleno.
+> Este comportamiento se observó en **supermercados / CPG (Vea)**. Otros tipos de local (restaurantes, etc.) pueden manejar los precios y promos de otra forma.
+
+Hallazgo clave para no engañar al usuario: en el catálogo de Vea, muchos descuentos (`have_discount`, `discount`) son **precios Prime** que **solo se cobran a socios** — un usuario no-Prime paga precio lleno.
 
 Cómo se distingue de verdad: los **descuentos reales aparecen en el detalle de checkout** (`CHECKOUT_DETAIL`, tras `CART_RECALCULATE`) como línea **"Descuentos de tienda"**; lo que no baja ahí, no es real para vos. También se validaron **combos por cantidad** ("Agregá 3, Pagá 2"), que sí aplican para todos.
 

@@ -106,12 +106,10 @@ Y le hablás natural: *"buscá pizza en Vea"*, *"armame un carrito con lo que co
 
 El desarrollo del soporte Argentina (lo de este fork) está en estos archivos:
 
-- **`src/rappi/constants.py`** — host de API de Argentina (`services.rappi.com.ar`), país `ar`, header `accept-language: es-AR`, y resolución de país desde `~/.rappi/config.json`. Argentina usa un **set mínimo de headers**: el gateway de AR devuelve respuestas vacías si se le mandan los headers extra de CO/MX (`app-version`, `x-application-id`, etc.).
+- **`src/rappi/constants.py`** — host de API de Argentina (`services.rappi.com.ar`), país `ar`, header `accept-language: es-AR`, y resolución de país desde `~/.rappi/config.json`. Argentina usa un **set mínimo de headers**: el gateway de AR devuelve respuestas vacías si se le mandan los headers extra que usan otros mercados de Rappi (`app-version`, `x-application-id`, etc.).
 - **`src/rappi/services/address.py`** — sincronización de coordenadas tolerante (AR no tiene el endpoint de "marcar dirección activa").
 - **`src/rappi/cli/auth.py`** — opción `--country ar`.
-- **`tests/test_constants.py`** — tests de headers por país.
-
-> Nota técnica: los **descuentos** aparecen en el detalle de checkout (tras recalcular), no en el carrito crudo. Los descuentos de "precio Prime" no se aplican si no sos socio Prime.
+- **`tests/test_constants.py`** — tests del set de headers.
 
 ---
 
